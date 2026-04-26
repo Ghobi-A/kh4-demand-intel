@@ -18,7 +18,10 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Data and models — too large for git, regenerate via scrapers
-data/raw/
+data/raw/*
+!data/raw/youtube/
+data/raw/youtube/*
+!data/raw/youtube/video_seed_list.example.csv
 data/processed/
 models/
 
