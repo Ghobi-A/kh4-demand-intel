@@ -13,11 +13,6 @@ def test_fetch_youtube_comments_maps_to_signal_record(
     tmp_path,
 ) -> None:
     monkeypatch.setenv("YOUTUBE_API_KEY", "test-key")
-    monkeypatch.setattr(
-        scraper_youtube,
-        "YOUTUBE_OUTPUT_PATH",
-        tmp_path / "youtube_comments.csv",
-    )
 
     responses = [
         {
@@ -89,6 +84,7 @@ def test_fetch_youtube_comments_maps_to_signal_record(
     records = scraper_youtube.fetch_youtube_comments(
         video_id="video123",
         max_results=2,
+        output_dir=tmp_path,
     )
 
     assert len(records) == 2
@@ -107,7 +103,7 @@ def test_fetch_youtube_comments_maps_to_signal_record(
     assert records[1].id == "comment_2"
     assert records[1].metadata["reply_count"] == 0
 
-    out_df = pd.read_csv(tmp_path / "youtube_comments.csv")
+    out_df = pd.read_csv(tmp_path / "youtube_comments_video123.csv")
     assert len(out_df) == 2
     assert out_df.loc[0, "source"] == "youtube"
     assert json.loads(out_df.loc[0, "metadata"])["video_id"] == "video123"
@@ -121,3 +117,8 @@ def test_fetch_youtube_comments_requires_api_key(
 
     with pytest.raises(ValueError, match="YOUTUBE_API_KEY"):
         scraper_youtube.fetch_youtube_comments(video_id="video123")
+
+
+def test_build_output_path_uses_default_pattern() -> None:
+    path = scraper_youtube._build_output_path("abc123")
+    assert path == scraper_youtube.YOUTUBE_OUTPUT_DIR / "youtube_comments_abc123.csv"

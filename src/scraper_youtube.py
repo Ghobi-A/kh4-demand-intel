@@ -34,6 +34,7 @@ log = logging.getLogger(__name__)
 
 YOUTUBE_COMMENTS_ENDPOINT = "https://www.googleapis.com/youtube/v3/commentThreads"
 YOUTUBE_OUTPUT_PATH = Path("data/raw/youtube/youtube_comments.csv")
+YOUTUBE_OUTPUT_DIR = Path("data/raw/youtube")
 
 
 def _parse_iso8601(timestamp: str) -> datetime:
@@ -78,7 +79,18 @@ def _save_records(records: list[SignalRecord], out_path: Path) -> None:
     df.to_csv(out_path, index=False)
 
 
-def fetch_youtube_comments(video_id: str, max_results: int = 100) -> list[SignalRecord]:
+def _build_output_path(video_id: str, output_dir: Path | None = None) -> Path:
+    """Build output path, namespaced by video_id to avoid overwrite."""
+    if output_dir is None:
+        output_dir = YOUTUBE_OUTPUT_DIR
+    return output_dir / f"youtube_comments_{video_id}.csv"
+
+
+def fetch_youtube_comments(
+    video_id: str,
+    max_results: int = 100,
+    output_dir: Path | str | None = None,
+) -> list[SignalRecord]:
     """Fetch top-level YouTube comments and persist them as raw CSV."""
     load_dotenv()
     api_key = os.getenv("YOUTUBE_API_KEY")
@@ -143,8 +155,10 @@ def fetch_youtube_comments(video_id: str, max_results: int = 100) -> list[Signal
         f"Fetched {len(records)} comments across {pages_fetched} page(s) "
         f"from video {video_id}"
     )
-    _save_records(records, YOUTUBE_OUTPUT_PATH)
-    log.info(f"Saved to {YOUTUBE_OUTPUT_PATH}")
+    resolved_output_dir = Path(output_dir) if output_dir else None
+    output_path = _build_output_path(video_id, resolved_output_dir)
+    _save_records(records, output_path)
+    log.info(f"Saved to {output_path}")
     return records
 
 
@@ -163,16 +177,22 @@ def main() -> None:
         default=100,
         help="Max comments to fetch (default: 100)",
     )
+    parser.add_argument(
+        "--output-dir",
+        default=str(YOUTUBE_OUTPUT_DIR),
+        help="Directory for output CSV files (default: data/raw/youtube)",
+    )
     args = parser.parse_args()
     if args.max_results <= 0:
         raise ValueError("--max-results must be a positive integer")
 
     log.info(
-        "Starting YouTube scrape for video_id=%s max_results=%s",
+        "Starting YouTube scrape for video_id=%s max_results=%s output_dir=%s",
         args.video_id,
         args.max_results,
+        args.output_dir,
     )
-    fetch_youtube_comments(args.video_id, args.max_results)
+    fetch_youtube_comments(args.video_id, args.max_results, args.output_dir)
 
 
 if __name__ == "__main__":
