@@ -14,7 +14,7 @@ Square Enix has been near-silent on KH4 since the 2022 reveal. The hypothesis: t
 
 A full pipeline from raw social signal to deployed decision tool:
 
-1. **Ingest** — Reddit discussion across r/KingdomHearts, r/SquareEnix, r/JRPG (multi-source ready: YouTube and Trends in v2)
+1. **Ingest** — Reddit (PullPush) + YouTube discussion mapped into one unified schema
 2. **Process** — Sentiment classification (VADER → DistilBERT) and topic clustering (BERTopic)
 3. **Score** — Re-engagement score per topic cluster, intent classification per signal
 4. **Serve** — Live Streamlit dashboard backed by a FastAPI prediction endpoint
@@ -26,7 +26,7 @@ A full pipeline from raw social signal to deployed decision tool:
 
 | Week | Deliverable |
 |------|-------------|
-| 1 | Reddit scraper + raw dataset + EDA notebook |
+| 1 | Reddit (PullPush) + YouTube ingestion + raw datasets + EDA notebook |
 | 2 | VADER sentiment + BERTopic clustering + insight charts |
 | 3 | Re-engagement scoring + Streamlit dashboard skeleton |
 | 4 | **Deploy live + case-study README + LinkedIn announcement** |
@@ -36,7 +36,7 @@ A full pipeline from raw social signal to deployed decision tool:
 | Week | Deliverable |
 |------|-------------|
 | 5 | FastAPI prediction endpoint; Streamlit calls it (service architecture, not notebook) |
-| 6 | YouTube ingestion through unified schema (no pipeline rewrite — just plug in) |
+| 6 | Google Trends ingestion through unified schema (no pipeline rewrite — just plug in) |
 | 7 | DistilBERT replaces VADER; MLflow experiment tracking |
 | 8 | Cross-platform divergence detection: where Reddit and YouTube diverge in signal |
 
@@ -54,12 +54,12 @@ kh4-demand-intel/
 ├── src/
 │   ├── schema.py          # Unified SignalRecord — works for any source
 │   ├── scraper_reddit.py  # Reddit ingestion (MVP)
-│   └── scraper_youtube.py # Phase 2
+│   └── scraper_youtube.py # YouTube ingestion (MVP)
 ├── tests/                 # pytest suite, runs in CI
 ├── data/
 │   ├── raw/
 │   │   ├── reddit/        # Reddit scraper output (gitignored)
-│   │   └── youtube/       # Phase 2
+│   │   └── youtube/       # YouTube scraper output (gitignored)
 │   └── processed/         # Cleaned + scored data
 ├── notebooks/             # EDA and analysis
 ├── models/                # Saved model artefacts (gitignored)
@@ -76,19 +76,19 @@ cd kh4-demand-intel
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env               # then add your Reddit API credentials
+cp .env.example .env               # then add your YouTube API key
 python src/scraper_reddit.py --limit 10 --top-n 5    # quick smoke test
 ```
 
-## Reddit API credentials
+## Data sources
 
-You need a Reddit "script" app to use PRAW. Free, takes ~3 minutes:
+### Reddit via PullPush (no auth)
 
-1. Go to https://www.reddit.com/prefs/apps
-2. Click "create another app" at the bottom
-3. Choose **script**, fill in name; redirect URI can be `http://localhost:8080`
-4. Copy `client_id` (under the app name) and `client_secret` into your `.env`
-5. Set `REDDIT_USER_AGENT` to something descriptive: `kh4-demand-intel by u/yourusername`
+Reddit ingestion runs through PullPush (`api.pullpush.io`), a community-maintained Pushshift mirror. This requires no Reddit OAuth credentials and supports historical archive queries for KH4 demand tracking.
+
+### YouTube via Data API v3 (API key required)
+
+YouTube ingestion uses the official `commentThreads.list` endpoint. Create an API key in Google Cloud Console (`https://console.cloud.google.com`) and set it as `YOUTUBE_API_KEY` in `.env`.
 
 ## Case study (drafted at end of MVP)
 
