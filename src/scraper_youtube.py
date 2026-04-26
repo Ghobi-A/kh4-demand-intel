@@ -2,11 +2,18 @@
 
 Fetches top-level comments via YouTube Data API v3 commentThreads.list,
 maps records into the shared SignalRecord schema, and persists to CSV.
+
+Usage:
+    python -m src.scraper_youtube --video-id <YT_VIDEO_ID> [--max-results 100]
+
+Requires YOUTUBE_API_KEY in .env.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
+import logging
 import os
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -18,6 +25,12 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from src.schema import SignalRecord
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+log = logging.getLogger(__name__)
 
 YOUTUBE_COMMENTS_ENDPOINT = "https://www.googleapis.com/youtube/v3/commentThreads"
 YOUTUBE_OUTPUT_PATH = Path("data/raw/youtube/youtube_comments.csv")
@@ -74,6 +87,7 @@ def fetch_youtube_comments(video_id: str, max_results: int = 100) -> list[Signal
 
     records: list[SignalRecord] = []
     next_page_token: str | None = None
+    pages_fetched = 0
 
     while len(records) < max_results:
         page_size = min(100, max_results - len(records))
@@ -83,6 +97,7 @@ def fetch_youtube_comments(video_id: str, max_results: int = 100) -> list[Signal
             max_results=page_size,
             page_token=next_page_token,
         )
+        pages_fetched += 1
 
         for item in payload.get("items", []):
             comment = item.get("snippet", {}).get("topLevelComment", {})
@@ -124,5 +139,34 @@ def fetch_youtube_comments(video_id: str, max_results: int = 100) -> list[Signal
         if not next_page_token:
             break
 
+    log.info(
+        f"Fetched {len(records)} comments across {pages_fetched} page(s) "
+        f"from video {video_id}"
+    )
     _save_records(records, YOUTUBE_OUTPUT_PATH)
+    log.info(f"Saved to {YOUTUBE_OUTPUT_PATH}")
     return records
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Scrape YouTube comments for KH4 demand intelligence"
+    )
+    parser.add_argument(
+        "--video-id",
+        required=True,
+        help="YouTube video ID (the bit after v= in the URL)",
+    )
+    parser.add_argument(
+        "--max-results",
+        type=int,
+        default=100,
+        help="Max comments to fetch (default: 100)",
+    )
+    args = parser.parse_args()
+
+    fetch_youtube_comments(args.video_id, args.max_results)
+
+
+if __name__ == "__main__":
+    main()
