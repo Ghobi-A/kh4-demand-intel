@@ -164,7 +164,14 @@ def main() -> None:
         help="Max comments to fetch (default: 100)",
     )
     args = parser.parse_args()
+    if args.max_results <= 0:
+        raise ValueError("--max-results must be a positive integer")
 
+    log.info(
+        "Starting YouTube scrape for video_id=%s max_results=%s",
+        args.video_id,
+        args.max_results,
+    )
     fetch_youtube_comments(args.video_id, args.max_results)
 
 

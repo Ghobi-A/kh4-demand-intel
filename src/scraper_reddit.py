@@ -219,6 +219,9 @@ def main() -> None:
     parser.add_argument("--skip-comments", action="store_true",
                         help="Skip comment scraping (posts only)")
     args = parser.parse_args()
+    if args.limit > 100:
+        log.info("PullPush max page size is 100; capping --limit to 100.")
+        args.limit = 100
 
     log.info("Using PullPush API (no Reddit auth required)")
     posts = scrape_posts(limit_per_query=args.limit)
