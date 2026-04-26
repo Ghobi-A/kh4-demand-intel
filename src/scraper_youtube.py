@@ -33,7 +33,6 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 YOUTUBE_COMMENTS_ENDPOINT = "https://www.googleapis.com/youtube/v3/commentThreads"
-YOUTUBE_OUTPUT_PATH = Path("data/raw/youtube/youtube_comments.csv")
 YOUTUBE_OUTPUT_DIR = Path("data/raw/youtube")
 
 
