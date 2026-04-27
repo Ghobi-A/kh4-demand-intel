@@ -1,8 +1,8 @@
 # Kingdom Hearts IV: Demand Intelligence
 
-A deployed fan-signal analytics system for **Kingdom Hearts IV**, designed to translate community behaviour into decision relevant insight.
+A deployed fan-signal analytics system for **Kingdom Hearts IV**, designed to translate community behaviour into **decision relevant insights**.
 
-Built following a final-stage interview with Square Enix’s recommendation team — where the identified gap was not modelling knowledge, but **production level execution and decision framing**.
+Built to explore how player sentiment and behaviour can be translated into actionable signals within live game ecosystems.
 
 ---
 
@@ -10,13 +10,15 @@ Built following a final-stage interview with Square Enix’s recommendation team
 
 This project models **player demand under uncertainty**, using social signals as a proxy for intent, engagement, and disengagement.
 
+This project applies **recommendation-system thinking** to unstructured community data, treating social signals as implicit feedback for demand modelling.
+
 **The core problem:**
 
 Square Enix has maintained near silence on KH4 since its 2022 reveal.
 
 **Hypothesis:**
 
-> Silence creates awareness without conversion — players know KH4 exists, but may not be forming strong purchase intent.
+> Silence creates awareness without conversion, players know KH4 exists, but are not forming strong purchase intent.
 
 This system quantifies that gap.
 
@@ -77,7 +79,7 @@ To bridge that gap, signals are mapped into behavioural intent categories:
 | confusion_barrier | Narrative complexity reducing accessibility |
 | general_discussion | Non-actionable engagement |
 
-This reframes sentiment into **decision relevant demand states**.
+This reframes sentiment into **decision-relevant demand states**.
 
 ---
 
@@ -95,6 +97,49 @@ This aligns with recommendation-system thinking:
 - identifying latent demand  
 - quantifying conversion friction  
 - prioritising intervention strategies  
+
+---
+
+## Connection to recommendation systems
+
+This system mirrors core recommendation-system principles, reframed for demand intelligence:
+
+- **User intent modelling** → Signals classified into behavioural intent states  
+- **Implicit feedback modelling** → Social signals used as behavioural proxies  
+- **Cold-start handling** → Works without direct gameplay or purchase data  
+- **Re-ranking logic** → Prioritises signals based on re-engagement potential  
+- **Conversion optimisation** → Focus on influencing behaviour, not just measuring it  
+
+Each signal can be treated as a weak feedback signal:
+
+```
+user sentiment + intent → proxy for likelihood of engagement or conversion
+```
+
+This positions the system as an upstream layer to recommendation or marketing decision pipelines.
+
+---
+
+## Future recommendation system extensions
+
+This system can be extended into a full recommendation or decision-ranking framework:
+
+- **User-level embeddings**  
+  Aggregate signals by user or cohort to model player personas and behavioural profiles  
+
+- **Content/topic embeddings**  
+  Represent themes (e.g. nostalgia, confusion, hype) as vectorised features for ranking  
+
+- **Re-ranking layer**  
+  Rank topics or signals based on expected impact on engagement or conversion  
+
+- **Temporal modelling**  
+  Track how intent evolves over time (e.g. decay of hype, spikes after announcements)  
+
+- **Intervention optimisation**  
+  Use signals to prioritise actions such as trailers, recaps, or marketing beats  
+
+In this form, the pipeline transitions from descriptive analytics into a **decision-support system aligned with recommendation system architectures**.
 
 ---
 
@@ -155,6 +200,24 @@ Sentiment is largely positive, but:
 
 ---
 
+## Decision framing (example)
+
+Given the current signal distribution:
+
+- High frustrated demand relative to high intent  
+- Strong nostalgia-driven engagement  
+- Weak new player acquisition signals  
+
+A likely intervention strategy would be:
+
+- Increase communication cadence to reduce uncertainty  
+- Leverage legacy callbacks to activate nostalgia segments  
+- Introduce onboarding or recap content to reduce narrative barriers  
+
+This demonstrates how community signals can be translated into concrete product and marketing actions.
+
+---
+
 ## Example: signal interpretation
 
 | Pattern | Meaning | Action |
@@ -210,7 +273,7 @@ community signals → product & marketing decisions
 
 ## Author
 
-**Ghobi Ara**  
+**Ghobi Aravindan**  
 MSc Data Science — City, University of London  
 
-Built as a direct response to a Square Enix recommendation systems interview, focusing on **execution, deployment, and decision relevance over theory**.
+Focus: applied analytics, behavioural signal modelling, and decision systems.
