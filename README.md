@@ -272,21 +272,7 @@ This demonstrates how community signals can be translated into concrete product 
 
 ---
 
-## Positioning
-
-This is not a sentiment analysis project.
-
-It is a **demand intelligence system** designed to bridge:
-
-```
-community signals → product & marketing decisions
-```
-
----
-
 ## Author
 
 **Ghobi Aravindan**  
-MSc Data Science — City, University of London  
 
-Focus: applied analytics, behavioural signal modelling, and decision systems.
