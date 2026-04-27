@@ -1,99 +1,216 @@
 # Kingdom Hearts IV: Demand Intelligence
 
-A deployed fan-signal analytics system for *Kingdom Hearts IV*, using Reddit discussion data to surface player sentiment, frustration topics, and a re-engagement scoring model for lapsed franchise players.
+A deployed fan-signal analytics system for **Kingdom Hearts IV**, designed to translate community behaviour into decision relevant insight.
 
-> Built as a portfolio piece following a final-round interview at Square Enix's recommendation team. The interview revealed the gap to close was production deployment evidence, not theoretical knowledge — this project is the answer.
+Built following a final-stage interview with Square Enix’s recommendation team — where the identified gap was not modelling knowledge, but **production level execution and decision framing**.
 
-**Status:** In development. Live dashboard target: end of Week 4.
+---
 
-## The thesis
+## Overview
 
-Square Enix has been near-silent on KH4 since the 2022 reveal. The hypothesis: this silence translates to **awareness without intent** — players know KH4 exists but aren't actively forming purchase intent. This project quantifies that with social-signal data and proposes a re-engagement scoring framework rooted in the same recommendation-system thinking used by Square Enix's analytics function.
+This project models **player demand under uncertainty**, using social signals as a proxy for intent, engagement, and disengagement.
+
+**The core problem:**
+
+Square Enix has maintained near silence on KH4 since its 2022 reveal.
+
+**Hypothesis:**
+
+> Silence creates awareness without conversion — players know KH4 exists, but may not be forming strong purchase intent.
+
+This system quantifies that gap.
+
+---
 
 ## What this builds
 
-A full pipeline from raw social signal to deployed decision tool:
+A full pipeline from raw community signals to actionable insight:
 
-1. **Ingest** — Reddit (PullPush) + YouTube discussion mapped into one unified schema
-2. **Process** — Sentiment classification (VADER → DistilBERT) and topic clustering (BERTopic)
-3. **Score** — Re-engagement score per topic cluster, intent classification per signal
-4. **Serve** — Live Streamlit dashboard backed by a FastAPI prediction endpoint
-5. **Document** — Case-study README with architecture, trade-offs, failure modes, and "what I'd do at production scale"
+```
+Ingest → Clean → Sentiment → Intent → Score → Serve
+```
+
+- **Ingest** — Reddit (PullPush) + YouTube comments  
+- **Process** — Cleaning + VADER sentiment scoring  
+- **Interpret** — Intent classification layer (behavioural signals)  
+- **Score** — Re-engagement scoring (lapsed player recovery potential)  
+- **Serve** — Streamlit dashboard + FastAPI endpoint (planned)  
+
+---
+
+## Methodology
+
+### 1. Multi-source signal ingestion
+- Reddit discussions (long-form reasoning, community sentiment)  
+- YouTube comments (high-volume, reactive sentiment)  
+- Unified into a single schema (`SignalRecord`)  
+
+---
+
+### 2. Sentiment layer (VADER)
+
+Each signal is scored using:
+
+- neg / neu / pos probabilities  
+- compound score  
+
+Mapped into:
+
+- positive  
+- negative  
+- neutral  
+
+This provides baseline emotional polarity — but not actionability.
+
+---
+
+### 3. Intent classification (MVP layer)
+
+To bridge that gap, signals are mapped into behavioural intent categories:
+
+| Intent | Meaning |
+|------|--------|
+| high_intent | Explicit purchase intent |
+| frustrated_demand | Demand blocked by lack of updates |
+| nostalgia_reactivation | Returning players driven by legacy attachment |
+| new_customer_interest | Signals from potential new players |
+| confusion_barrier | Narrative complexity reducing accessibility |
+| general_discussion | Non-actionable engagement |
+
+This reframes sentiment into **decision relevant demand states**.
+
+---
+
+### 4. Re-engagement framing
+
+The system is designed to answer:
+
+```
+Not: “Are players positive?”
+But: “What is preventing conversion?”
+```
+
+This aligns with recommendation-system thinking:
+
+- identifying latent demand  
+- quantifying conversion friction  
+- prioritising intervention strategies  
+
+---
+
+## Current dataset (~4.8k signals)
+
+Combined Reddit + YouTube sample:
+
+- **Total signals:** 4,831  
+- **Positive sentiment:** 2,748  
+- **Negative sentiment:** 1,025  
+- **Neutral:** 1,058  
+
+### Intent distribution
+
+- general_discussion: 4,273  
+- nostalgia_reactivation: 313  
+- frustrated_demand: 121  
+- new_customer_interest: 49  
+- high_intent: 46  
+- confusion_barrier: 29  
+
+---
+
+## Key insights
+
+### 1. Demand exists, but is friction-constrained
+
+High presence of *frustrated_demand* relative to *high_intent*:
+
+> Interest is present, but not converting into action.
+
+---
+
+### 2. Nostalgia dominates engagement
+
+Strong signals tied to KH1/KH2:
+
+> Engagement is anchored in legacy identity rather than new narrative.
+
+---
+
+### 3. Weak new-player acquisition signal
+
+Low *new_customer_interest*:
+
+> KH4 currently behaves as a **retention-driven product**, not a growth-driven one.
+
+---
+
+### 4. Core risk = communication gap
+
+Sentiment is largely positive, but:
+
+- repeated references to “no news”  
+- declining trust in updates  
+
+> The primary risk is not negativity — it is **uncertainty**.
+
+---
+
+## Example: signal interpretation
+
+| Pattern | Meaning | Action |
+|------|--------|--------|
+| “4 years no news” | Frustrated demand | Increase communication cadence |
+| KH2 nostalgia spikes | Reactivation anchor | Leverage legacy callbacks |
+| “Story too confusing” | Barrier to entry | Improve onboarding / recap content |
+| Low high_intent signals | Weak conversion | Strengthen marketing clarity |
+
+---
 
 ## Roadmap
 
-### MVP (Weeks 1–4) — ship the clickable thing
+### MVP (Weeks 1–4)
+- Data ingestion (Reddit + YouTube)  
+- Sentiment + intent pipeline  
+- Initial dashboard  
+- Deployment  
 
-| Week | Deliverable |
-|------|-------------|
-| 1 | Reddit (PullPush) + YouTube ingestion + raw datasets + EDA notebook |
-| 2 | VADER sentiment + BERTopic clustering + insight charts |
-| 3 | Re-engagement scoring + Streamlit dashboard skeleton |
-| 4 | **Deploy live + case-study README + LinkedIn announcement** |
+### Phase 2
+- DistilBERT sentiment (replace VADER)  
+- BERTopic clustering  
+- FastAPI service layer  
+- Google Trends integration  
 
-### Phase 2 (Weeks 5–8) — make it interview-grade
+### Phase 3
+- Scheduled data refresh  
+- Monitoring + Dockerisation  
+- Cross-platform divergence analysis  
 
-| Week | Deliverable |
-|------|-------------|
-| 5 | FastAPI prediction endpoint; Streamlit calls it (service architecture, not notebook) |
-| 6 | Google Trends ingestion through unified schema (no pipeline rewrite — just plug in) |
-| 7 | DistilBERT replaces VADER; MLflow experiment tracking |
-| 8 | Cross-platform divergence detection: where Reddit and YouTube diverge in signal |
+---
 
-### Phase 3 (Weeks 9–12) — production polish
+## Limitations
 
-| Week | Deliverable |
-|------|-------------|
-| 9–10 | Docker, basic monitoring, scheduled re-scrape via GitHub Actions cron |
-| 11–12 | Full case-study write-up, second smaller portfolio project, applications |
+- Rule-based intent classification (no ML generalisation yet)  
+- Dataset bias based on selected videos  
+- No temporal modelling of demand evolution  
+- Early-stage scoring framework  
 
-## Repo structure
+---
+
+## Positioning
+
+This is not a sentiment analysis project.
+
+It is a **demand intelligence system** designed to bridge:
 
 ```
-kh4-demand-intel/
-├── src/
-│   ├── schema.py          # Unified SignalRecord — works for any source
-│   ├── scraper_reddit.py  # Reddit ingestion (MVP)
-│   └── scraper_youtube.py # YouTube ingestion (MVP)
-├── tests/                 # pytest suite, runs in CI
-├── data/
-│   ├── raw/
-│   │   ├── reddit/        # Reddit scraper output (gitignored)
-│   │   └── youtube/       # YouTube scraper output (gitignored)
-│   └── processed/         # Cleaned + scored data
-├── notebooks/             # EDA and analysis
-├── models/                # Saved model artefacts (gitignored)
-├── app/                   # Streamlit dashboard (Week 3)
-├── api/                   # FastAPI endpoint (Week 5)
-└── .github/workflows/     # CI: lint + test on every push
+community signals → product & marketing decisions
 ```
 
-## Local setup
-
-```bash
-git clone https://github.com/<your-username>/kh4-demand-intel
-cd kh4-demand-intel
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env               # then add your YouTube API key
-python src/scraper_reddit.py --limit 10 --top-n 5    # quick smoke test
-```
-
-## Data sources
-
-### Reddit via PullPush (no auth)
-
-Reddit ingestion runs through PullPush (`api.pullpush.io`), a community-maintained Pushshift mirror. This requires no Reddit OAuth credentials and supports historical archive queries for KH4 demand tracking.
-
-### YouTube via Data API v3 (API key required)
-
-YouTube ingestion uses the official `commentThreads.list` endpoint. Create an API key in Google Cloud Console (`https://console.cloud.google.com`) and set it as `YOUTUBE_API_KEY` in `.env`.
-
-## Case study (drafted at end of MVP)
-
-The final write-up will cover problem framing, data sources, pipeline design, model trade-offs (VADER vs DistilBERT, BERTopic vs LDA), scoring logic, deployment architecture, failure modes, and what would change at production scale — the last section being the direct answer to the question that decided the Square Enix interview.
+---
 
 ## Author
 
-**Ghobi Ara** — MSc Data Science, City University of London. Background in electrical engineering, applied ML in e-commerce and marketing analytics, dissertation on differential privacy.
+**Ghobi Ara**  
+MSc Data Science — City, University of London  
+
+Built as a direct response to a Square Enix recommendation systems interview, focusing on **execution, deployment, and decision relevance over theory**.
