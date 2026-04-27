@@ -163,6 +163,19 @@ Combined Reddit + YouTube sample:
 
 ---
 
+## Visual Outputs
+
+### Sentiment distribution
+![Sentiment distribution](reports/figures/sentiment_distribution.png)
+
+### Intent distribution
+![Intent distribution](reports/figures/intent_distribution.png)
+
+### Actionable demand signals
+![Actionable intent distribution](reports/figures/actionable_intent_distribution.png)
+
+---
+
 ## Key insights
 
 ### 1. Demand exists, but is friction-constrained
