@@ -4,11 +4,12 @@ Reads sentiment-processed signals and adds two fields:
 - intent_label
 - intent_confidence
 
-This is intentionally a simple MVP baseline built on keyword matching.
+This is intentionally a simple MVP baseline built on phrase/regex matching.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -16,76 +17,128 @@ import pandas as pd
 INPUT_PATH = Path("data/processed/signals_sentiment.csv")
 OUTPUT_PATH = Path("data/processed/signals_intent.csv")
 
-INTENT_KEYWORDS: dict[str, list[str]] = {
-    "high_intent": [
-        "day one",
-        "preorder",
-        "pre-order",
-        "buying",
-        "instant buy",
-        "must buy",
-        "can't wait",
-    ],
-    "frustrated_demand": [
-        "where is",
-        "still waiting",
-        "4 years",
-        "no news",
-        "silence",
-        "release date",
-        "forgot this existed",
-    ],
-    "nostalgia_reactivation": [
-        "kh1",
-        "kh2",
-        "childhood",
-        "nostalgia",
-        "ps2",
-        "old kingdom hearts",
-        "bring back",
-    ],
-    "new_customer_interest": [
-        "marvel",
-        "star wars",
-        "pixar",
-        "dreamworks",
-        "disney plus",
-        "disneyland",
-        "new players",
-    ],
-    "confusion_barrier": [
-        "confusing",
-        "story makes no sense",
-        "too complicated",
-        "don't understand",
-        "need recap",
-    ],
-}
-
-
-def _matched_groups(text: str) -> list[str]:
-    """Return the list of intent groups whose keywords appear in text."""
-    normalized = text.casefold()
-    matches: list[str] = []
-
-    for label, keywords in INTENT_KEYWORDS.items():
-        if any(keyword in normalized for keyword in keywords):
-            matches.append(label)
-
-    return matches
+# Priority order from manual audit:
+# 1) expectation_decay
+# 2) high_intent
+# 3) new_customer_interest
+# 4) confusion_barrier
+# 5) content_drought_fatigue
+# 6) frustrated_demand
+# 7) nostalgia_reactivation
+INTENT_PATTERNS: list[tuple[str, list[str]]] = [
+    (
+        "expectation_decay",
+        [
+            r"\bdon'?t care anymore\b",
+            r"\blost interest\b",
+            r"\bi(?: have|'ve) moved on\b",
+            r"\bstopped caring\b",
+            r"\bnot buying (?:it|this)\b",
+            r"\bi(?: am|'m) not buying\b",
+            r"\bno faith\b",
+            r"\bno trust\b",
+            r"\bdoesn'?t exist to me\b",
+        ],
+    ),
+    (
+        "high_intent",
+        [
+            r"\bbuy(?:ing)?\b",
+            r"\bbought\b",
+            r"\bpre[ -]?order\b",
+            r"\bday one\b",
+            r"\breplay(?:ing)?\b",
+            r"\bplay again\b",
+            r"\b100%\b",
+            r"\bachievements?\b",
+            r"\bcomplete (?:the )?series\b",
+            r"\bi(?: am|'m) going to play\b",
+            r"\bi(?: wi)?ll play\b",
+            r"\bi(?: am|'m) getting (?:it|this)\b",
+            r"\bi(?: have|'ve) bought (?:this|the) series\b",
+        ],
+    ),
+    (
+        "new_customer_interest",
+        [
+            r"\bnever played\b",
+            r"\bfirst time playing\b",
+            r"\bfinally (?:able|get) to play\b",
+            r"\bnow (?:that|its|it is) on (?:steam|pc|switch)\b",
+            r"\b(?:can|could) finally play\b",
+            r"\bthinking about starting\b",
+            r"\bnew to (?:kh|kingdom hearts)\b",
+            r"\bentry point\b",
+            r"\baccessible\b",
+            r"\blocali[sz]ation\b",
+        ],
+    ),
+    (
+        "confusion_barrier",
+        [
+            r"\bconfusing\b",
+            r"\bconvoluted\b",
+            r"\bhard to follow\b",
+            r"\bdon'?t understand\b",
+            r"\bwhat order do i play\b",
+            r"\bwhich games are required\b",
+            r"\bmakes no sense\b",
+            r"\btoo much information\b",
+            r"\boverwhelmed\b",
+            r"\b(?:i'?m|im) lost\b",
+        ],
+    ),
+    (
+        "content_drought_fatigue",
+        [
+            r"\bcopium\b",
+            r"\bstarving\b",
+            r"\bdrought\b",
+            r"\bcrumbs\b",
+            r"\bclown makeup\b",
+            r"\b(?:we'?ll|i'?ll) take anything\b",
+            r"\bat this point (?:we'?ll|i'?ll) take anything\b",
+        ],
+    ),
+    (
+        "frustrated_demand",
+        [
+            r"\bwhere is kh4\b",
+            r"\bstill waiting\b",
+            r"\bno (?:news|trailer|updates?)\b",
+            r"\brelease date\b",
+            r"\byears? of silence\b",
+            r"\bgive us something\b",
+            r"\bcontent drought\b",
+            r"\b\d+ years?\b",
+        ],
+    ),
+    (
+        "nostalgia_reactivation",
+        [
+            r"\bwhen i was a kid\b",
+            r"\bchildhood\b",
+            r"\bgrew up with\b",
+            r"\bsince i was \d+\b",
+            r"\bremember playing\b",
+            r"\bbrings me back\b",
+            r"\bps2\b",
+            r"\bkh2\b",
+            r"\bkh1\b",
+        ],
+    ),
+]
 
 
 def classify_intent(text: str) -> tuple[str, float]:
     """Classify one text string into an intent label and confidence."""
-    matches = _matched_groups(text)
+    normalized = text.casefold().strip()
 
-    if not matches:
-        return "general_discussion", 0.3
+    for label, patterns in INTENT_PATTERNS:
+        if any(re.search(pattern, normalized) for pattern in patterns):
+            return label, 0.7
 
-    if len(matches) == 1:
-        return matches[0], 0.7
-
-    return matches[0], 1.0
+    return "general_discussion", 0.3
 
 
 def add_intent_columns(df: pd.DataFrame, text_column: str = "text") -> pd.DataFrame:
