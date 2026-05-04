@@ -60,6 +60,24 @@ def test_activation_score() -> None:
     assert scored["activation_score"].tolist() == [1, 1, 1, 0]
 
 
+def test_new_intent_weights_and_flags() -> None:
+    df = pd.DataFrame(
+        {
+            "parent_id": ["v1", "v1"],
+            "intent_label": ["expectation_decay", "content_drought_fatigue"],
+            "sentiment_label": ["negative", "neutral"],
+            "engagement": [0, 0],
+        }
+    )
+
+    scored = score_dataframe(df)
+
+    assert scored.loc[0, "intent_weight"] == -1.5
+    assert scored.loc[1, "intent_weight"] == 0.6
+    assert scored["risk_score"].tolist() == [1, 1]
+    assert scored["activation_score"].tolist() == [0, 0]
+
+
 def test_video_level_aggregation() -> None:
     df = pd.DataFrame(
         {

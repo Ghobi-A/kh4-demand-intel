@@ -74,12 +74,16 @@ To bridge that gap, signals are mapped into behavioural intent categories:
 |------|--------|
 | high_intent | Explicit purchase intent |
 | frustrated_demand | Demand blocked by lack of updates |
+| expectation_decay | Disengagement / lost confidence after prolonged silence |
+| content_drought_fatigue | Coping signals (drought memes, crumbs, copium, “take anything”) |
 | nostalgia_reactivation | Returning players driven by legacy attachment |
 | new_customer_interest | Signals from potential new players |
 | confusion_barrier | Narrative complexity reducing accessibility |
 | general_discussion | Non-actionable engagement |
 
 This reframes sentiment into **decision-relevant demand states**.
+
+The rule-based classifier has also been tightened through a manual audit workflow to reduce ambiguous label assignments and improve consistency across edge-case community phrasing.
 
 ---
 
@@ -265,7 +269,7 @@ This demonstrates how community signals can be translated into concrete product 
 
 ## Limitations
 
-- Rule-based intent classification (no ML generalisation yet)  
+- Rule-based intent classification (no ML generalisation yet), tightened via manual audit passes and iterative taxonomy refinement  
 - Dataset bias based on selected videos  
 - No temporal modelling of demand evolution  
 - Early-stage scoring framework  
