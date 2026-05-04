@@ -13,6 +13,19 @@ def test_cant_wait_is_general_discussion() -> None:
     assert label == "general_discussion"
 
 
+
+
+def test_regression_marvel_star_wars_feature_speculation_stays_general_discussion() -> None:
+    label, _ = classify_intent(
+        "Would be cool if KH4 adds Marvel team-up attacks and Star Wars ship combat"
+    )
+    assert label == "general_discussion"
+
+
+def test_regression_love_kingdom_hearts_stays_general_discussion() -> None:
+    label, _ = classify_intent("I love Kingdom Hearts so much")
+    assert label == "general_discussion"
+
 def test_high_intent_bought_series() -> None:
     label, _ = classify_intent("I've bought this series 3 times")
     assert label == "high_intent"
