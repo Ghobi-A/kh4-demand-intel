@@ -20,7 +20,9 @@ INTENT_WEIGHTS: dict[str, float] = {
     "nostalgia_reactivation": 1.5,
     "new_customer_interest": 1.2,
     "frustrated_demand": 1.0,
+    "content_drought_fatigue": 0.6,
     "confusion_barrier": -1.0,
+    "expectation_decay": -1.5,
     "general_discussion": 0.1,
 }
 
@@ -30,7 +32,12 @@ SENTIMENT_WEIGHTS: dict[str, float] = {
     "negative": -0.5,
 }
 
-RISK_INTENTS = {"frustrated_demand", "confusion_barrier"}
+RISK_INTENTS = {
+    "frustrated_demand",
+    "confusion_barrier",
+    "content_drought_fatigue",
+    "expectation_decay",
+}
 ACTIVATION_INTENTS = {
     "high_intent",
     "nostalgia_reactivation",
