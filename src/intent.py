@@ -117,14 +117,11 @@ INTENT_PATTERNS: list[tuple[str, list[str]]] = [
         "nostalgia_reactivation",
         [
             r"\bwhen i was a kid\b",
-            r"\bchildhood\b",
+            r"\b(?:was|is) (?:literally )?my childhood\b",
             r"\bgrew up with\b",
             r"\bsince i was \d+\b",
             r"\bremember playing\b",
             r"\bbrings me back\b",
-            r"\bps2\b",
-            r"\bkh2\b",
-            r"\bkh1\b",
         ],
     ),
 ]
