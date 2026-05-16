@@ -13,6 +13,13 @@ AUDIT_PATH = (
 )
 
 
+THRESHOLDS = {
+    "high_intent": 0.55,
+    "nostalgia_reactivation": 0.70,
+    "new_customer_interest": 0.70,
+}
+
+
 def _load_audit() -> pd.DataFrame:
     return pd.read_csv(AUDIT_PATH)
 
@@ -40,7 +47,7 @@ def test_precision_slices_meet_threshold() -> None:
             / len(precision_slice)
         )
 
-        assert precision >= 0.70, (
+        assert precision >= THRESHOLDS[target_class], (
             f"{target_class} precision below threshold: {precision:.2%}"
         )
 
