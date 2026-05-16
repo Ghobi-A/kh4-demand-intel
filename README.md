@@ -3,6 +3,7 @@
 An evaluated Python NLP pipeline that transforms Reddit and YouTube community discussion around Kingdom Hearts IV into structured sentiment, intent, and demand signals.
 
 The project is framed as **community demand intelligence**: a reproducible, test-backed workflow for turning noisy fan discourse into behavioural signals that can support product and marketing decisions. It uses an **evaluated rule-based NLP baseline**, includes **audit-backed taxonomy refinement**, and applies **recommendation-system-adjacent thinking** around implicit feedback and user intent.
+
 ---
 
 ## Project status
