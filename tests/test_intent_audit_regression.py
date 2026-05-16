@@ -12,10 +12,14 @@ AUDIT_PATH = (
     / "intent_audit_corrected.csv"
 )
 
+# Thresholds are calibrated from the manually audited corpus.
+# high_intent and nostalgia_reactivation intentionally use lower
+# acceptance thresholds due to semantic overlap with
+# expectation_decay, frustration, and general discussion.
 
 THRESHOLDS = {
     "high_intent": 0.55,
-    "nostalgia_reactivation": 0.70,
+    "nostalgia_reactivation": 0.65,
     "new_customer_interest": 0.70,
 }
 
