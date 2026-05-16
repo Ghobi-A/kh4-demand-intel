@@ -159,4 +159,4 @@ Dashboard planned for Pass 3.
 
 ## Author
 
-**Ghobi Aravindan**
+**Ghobikan Aravindan**
