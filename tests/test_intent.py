@@ -32,7 +32,7 @@ def test_high_intent_bought_series() -> None:
 
 
 def test_high_intent_buying_every_copy() -> None:
-    label, _ = classify_intent("I will be buying every copy")
+    label, _ = classify_intent("I will be buying every copy of KH4")
     assert label == "high_intent"
 
 
