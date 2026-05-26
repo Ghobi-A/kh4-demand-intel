@@ -1,7 +1,7 @@
-"""Smoke tests for unified schema and Reddit scraper.
+"""Schema and config smoke tests for current data-ingestion readiness.
 
-Real tests for scraper logic, preprocessing, and scoring will be added
-in Week 3 once the pipeline matures.
+These tests validate that SignalRecord accepts expected Reddit/YouTube
+shapes and that baseline scraper config values are defined.
 """
 
 from datetime import datetime, timezone
