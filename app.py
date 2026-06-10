@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-SIGNALS_PATH = Path("data/processed/signals_scored.csv")
-VIDEO_SCORES_PATH = Path("reports/tables/video_scores.csv")
+DEFAULT_SIGNALS_PATH = "data/demo/signals_scored_demo.csv"
+DEFAULT_VIDEO_SCORES_PATH = "data/demo/video_scores_demo.csv"
+SIGNALS_PATH = Path(os.getenv("SIGNALS_PATH", DEFAULT_SIGNALS_PATH))
+VIDEO_SCORES_PATH = Path(os.getenv("VIDEO_SCORES_PATH", DEFAULT_VIDEO_SCORES_PATH))
 REQUIRED_SIGNAL_COLUMNS = {
     "intent_label",
     "sentiment_label",
@@ -61,15 +64,21 @@ def require_files() -> bool:
     if not missing_paths:
         return True
 
-    st.warning("Dashboard data files are missing, so charts cannot be rendered yet.")
+    st.warning(
+        "Dashboard data files are missing, so charts cannot be rendered yet. "
+        "Committed demo data should exist for clean deployment; full local "
+        "pipeline outputs can be supplied with environment variables."
+    )
     st.markdown(
-        "The dashboard expects these pipeline outputs:\n"
+        "Missing dashboard inputs:\n"
         + "\n".join(f"- `{path}`" for path in missing_paths)
     )
     st.info(
-        "Create the scored signal and video-level outputs by running the pipeline "
-        "through sentiment → intent → score. If `data/processed/signals_intent.csv` "
-        "already exists, run: `python -m src.score`."
+        "By default the app loads `data/demo/signals_scored_demo.csv` and "
+        "`data/demo/video_scores_demo.csv`. To use full local data, set "
+        "`SIGNALS_PATH` and `VIDEO_SCORES_PATH` before running Streamlit. "
+        "If `data/processed/signals_intent.csv` already exists, regenerate "
+        "local scored outputs with: `python -m src.score`."
     )
     return False
 
@@ -88,12 +97,12 @@ def validate_columns(
     st.warning("Dashboard inputs were found, but some expected columns are missing.")
     if missing_signal_columns:
         st.markdown(
-            "Missing columns in `data/processed/signals_scored.csv`: "
+            f"Missing columns in `{SIGNALS_PATH}`: "
             f"`{sorted(missing_signal_columns)}`"
         )
     if missing_video_columns:
         st.markdown(
-            "Missing columns in `reports/tables/video_scores.csv`: "
+            f"Missing columns in `{VIDEO_SCORES_PATH}`: "
             f"`{sorted(missing_video_columns)}`"
         )
     st.info(
@@ -210,7 +219,10 @@ def render_explainability() -> None:
     st.header("How to read the scores")
     st.markdown(
         "- `demand_score` is a heuristic score calculated as "
-        "`intent_weight + sentiment_weight + log1p(engagement)`.\n"
+        "`(intent_weight + sentiment_weight) * "
+        "(1 + log1p(clipped_engagement) / 5)`, so engagement amplifies "
+        "the intent/sentiment signal without turning the table into a raw "
+        "popularity leaderboard.\n"
         "- `activation_score` marks rows with purchase, reactivation, or new-player "
         "interest signals.\n"
         "- `risk_score` marks rows with frustration, confusion, fatigue, or expectation "

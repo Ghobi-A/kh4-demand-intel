@@ -67,13 +67,15 @@ def score_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     scored["intent_weight"] = scored["intent_label"].map(INTENT_WEIGHTS).fillna(0.0)
     scored["sentiment_weight"] = scored["sentiment_label"].map(SENTIMENT_WEIGHTS).fillna(0.0)
-    scored["engagement_weight"] = np.log1p(
-        pd.to_numeric(scored["engagement"], errors="coerce").fillna(0.0)
-    )
+    clipped_engagement = pd.to_numeric(
+        scored["engagement"],
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0)
+    scored["engagement_weight"] = np.log1p(clipped_engagement)
 
-    scored["demand_score"] = (
-        scored["intent_weight"] + scored["sentiment_weight"] + scored["engagement_weight"]
-    )
+    base_signal = scored["intent_weight"] + scored["sentiment_weight"]
+    engagement_multiplier = 1 + (scored["engagement_weight"] / 5)
+    scored["demand_score"] = base_signal * engagement_multiplier
 
     scored["risk_score"] = scored["intent_label"].isin(RISK_INTENTS).astype(int)
     scored["activation_score"] = scored["intent_label"].isin(ACTIVATION_INTENTS).astype(int)

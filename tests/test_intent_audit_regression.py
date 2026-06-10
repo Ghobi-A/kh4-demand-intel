@@ -12,12 +12,12 @@ AUDIT_PATH = (
     / "intent_audit_corrected.csv"
 )
 
-# Thresholds are calibrated from the manually audited corpus.
+# Precision floors are derived from the manually audited corpus.
 # high_intent and nostalgia_reactivation intentionally use lower
-# acceptance thresholds due to semantic overlap with
+# acceptance floors due to semantic overlap with
 # expectation_decay, frustration, and general discussion.
 
-THRESHOLDS = {
+PRECISION_FLOORS = {
     "high_intent": 0.55,
     "nostalgia_reactivation": 0.65,
     "new_customer_interest": 0.70,
@@ -28,7 +28,7 @@ def _load_audit() -> pd.DataFrame:
     return pd.read_csv(AUDIT_PATH)
 
 
-def test_precision_slices_meet_threshold() -> None:
+def test_precision_slices_meet_precision_floors() -> None:
     audit = _load_audit()
     target_classes = [
         "high_intent",
@@ -51,8 +51,8 @@ def test_precision_slices_meet_threshold() -> None:
             / len(precision_slice)
         )
 
-        assert precision >= THRESHOLDS[target_class], (
-            f"{target_class} precision below threshold: {precision:.2%}"
+        assert precision >= PRECISION_FLOORS[target_class], (
+            f"{target_class} precision below precision floor: {precision:.2%}"
         )
 
 
