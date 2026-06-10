@@ -1,0 +1,5 @@
+parent_id,total_signals,mean_demand_score,total_risk_score,total_activation_score,dominant_intent,positive_share,negative_share
+demo_news_wait,4,-0.955113036237533,4,0,expectation_decay,0.0,0.75
+demo_pc_release,2,2.6684849517106657,0,2,new_customer_interest,0.5,0.0
+demo_story_access,3,-0.84934790933514,2,0,confusion_barrier,0.0,0.3333333333333333
+demo_trailer_reveal,3,3.4108078826954107,0,2,general_discussion,1.0,0.0

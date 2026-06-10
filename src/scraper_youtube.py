@@ -34,6 +34,7 @@ log = logging.getLogger(__name__)
 
 YOUTUBE_COMMENTS_ENDPOINT = "https://www.googleapis.com/youtube/v3/commentThreads"
 YOUTUBE_OUTPUT_DIR = Path("data/raw/youtube")
+YOUTUBE_REQUEST_TIMEOUT_SECONDS = 15
 
 
 def _parse_iso8601(timestamp: str) -> datetime:
@@ -59,7 +60,7 @@ def _fetch_comment_threads_page(
         params["pageToken"] = page_token
 
     request_url = f"{YOUTUBE_COMMENTS_ENDPOINT}?{urlencode(params)}"
-    with urlopen(request_url) as response:
+    with urlopen(request_url, timeout=YOUTUBE_REQUEST_TIMEOUT_SECONDS) as response:
         return json.loads(response.read().decode("utf-8"))
 
 

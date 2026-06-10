@@ -22,7 +22,8 @@ def test_score_calculation() -> None:
     assert scored.loc[0, "intent_weight"] == 2.0
     assert scored.loc[0, "sentiment_weight"] == 1.0
     assert scored.loc[0, "engagement_weight"] == math.log1p(9)
-    assert scored.loc[0, "demand_score"] == 2.0 + 1.0 + math.log1p(9)
+    expected_demand_score = (2.0 + 1.0) * (1 + (math.log1p(9) / 5))
+    assert scored.loc[0, "demand_score"] == expected_demand_score
 
 
 def test_risk_score() -> None:
@@ -101,7 +102,42 @@ def test_video_level_aggregation() -> None:
     assert by_parent.loc["v1", "negative_share"] == 0.5
 
     expected_v1_mean = (
-        (2.0 + 1.0 + math.log1p(9))
-        + (1.0 + (-0.5) + math.log1p(0))
+        ((2.0 + 1.0) * (1 + (math.log1p(9) / 5)))
+        + ((1.0 + (-0.5)) * (1 + (math.log1p(0) / 5)))
     ) / 2
     assert by_parent.loc["v1", "mean_demand_score"] == expected_v1_mean
+
+
+def test_negative_engagement_is_clipped_before_log_transform() -> None:
+    df = pd.DataFrame(
+        {
+            "parent_id": ["v1"],
+            "intent_label": ["high_intent"],
+            "sentiment_label": ["positive"],
+            "engagement": [-5],
+        }
+    )
+
+    scored = score_dataframe(df)
+
+    assert scored.loc[0, "engagement_weight"] == 0.0
+    assert not scored["demand_score"].isna().any()
+    assert scored.loc[0, "demand_score"] == 3.0
+
+
+def test_high_engagement_negative_signal_does_not_outrank_clear_positive_signal() -> None:
+    df = pd.DataFrame(
+        {
+            "parent_id": ["risk_popular", "clear_positive"],
+            "intent_label": ["expectation_decay", "high_intent"],
+            "sentiment_label": ["negative", "positive"],
+            "engagement": [1000, 5],
+        }
+    )
+
+    scored = score_dataframe(df).set_index("parent_id")
+
+    assert (
+        scored.loc["risk_popular", "demand_score"]
+        < scored.loc["clear_positive", "demand_score"]
+    )
