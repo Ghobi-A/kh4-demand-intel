@@ -8,8 +8,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-DEFAULT_SIGNALS_PATH = "data/demo/signals_scored_demo.csv"
-DEFAULT_VIDEO_SCORES_PATH = "data/demo/video_scores_demo.csv"
+DEFAULT_SIGNALS_PATH = "data/demo/signals_scored_portfolio.csv"
+DEFAULT_VIDEO_SCORES_PATH = "data/demo/video_scores_portfolio.csv"
 SIGNALS_PATH = Path(os.getenv("SIGNALS_PATH", DEFAULT_SIGNALS_PATH))
 VIDEO_SCORES_PATH = Path(os.getenv("VIDEO_SCORES_PATH", DEFAULT_VIDEO_SCORES_PATH))
 REQUIRED_SIGNAL_COLUMNS = {
@@ -74,8 +74,8 @@ def require_files() -> bool:
         + "\n".join(f"- `{path}`" for path in missing_paths)
     )
     st.info(
-        "By default the app loads `data/demo/signals_scored_demo.csv` and "
-        "`data/demo/video_scores_demo.csv`. To use full local data, set "
+        "By default the app loads `data/demo/signals_scored_portfolio.csv` and "
+        "`data/demo/video_scores_portfolio.csv`. To use full local data, set "
         "`SIGNALS_PATH` and `VIDEO_SCORES_PATH` before running Streamlit. "
         "If `data/processed/signals_intent.csv` already exists, regenerate "
         "local scored outputs with: `python -m src.score`."
@@ -121,6 +121,19 @@ def render_header() -> None:
         "community discussion around Kingdom Hearts IV as sentiment, intent, "
         "activation, risk, and heuristic demand signals."
     )
+    with st.expander("About this project", expanded=False):
+        st.markdown(
+            "**Problem:** Fan sentiment alone does not reveal whether discussion "
+            "signals purchase intent, reactivation, confusion, or churn risk.\n\n"
+            "**Method:** Public community discussion is cleaned, labelled with an "
+            "evaluated rule-based intent taxonomy, scored, and aggregated into a "
+            "recruiter-friendly Streamlit dashboard.\n\n"
+            "**Key finding:** Positive sentiment is not the same as behavioural "
+            "intent; nostalgia, new-customer interest, frustration, and confusion "
+            "need separate treatment.\n\n"
+            "**Validation:** A 200-row manual audit and regression tests enforce "
+            "precision floors for the highest-value intent classes."
+        )
 
 
 def render_sidebar_filters(signals_df: pd.DataFrame) -> dict[str, list[str]]:
@@ -261,6 +274,10 @@ def main() -> None:
     render_charts(filtered_df, video_scores_df)
     render_tables(filtered_df, video_scores_df)
     render_explainability()
+    st.caption(
+        "Unofficial portfolio project. Not affiliated with Square Enix, Disney, "
+        "or the Kingdom Hearts franchise. Data sourced from public community discussion."
+    )
 
 
 if __name__ == "__main__":
