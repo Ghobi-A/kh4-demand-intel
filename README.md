@@ -1,6 +1,6 @@
 # Kingdom Hearts IV: Demand Intelligence
 
-**Live dashboard:** Coming after Streamlit deployment.
+**Live dashboard:** https://kh4-demand-intel.streamlit.app
 
 **Key finding:** sentiment is not behavioural intent. Positive comments can still be low-action lore discussion, while negative or fatigued comments can reveal demand risk, confusion barriers, or reactivation opportunities.
 
