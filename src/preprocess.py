@@ -15,15 +15,41 @@ DEFAULT_INPUT_DIR = Path("data/raw")
 DEFAULT_OUTPUT_PATH = Path("data/processed/signals_clean.csv")
 URL_PATTERN = re.compile(r"https?://\S+")
 WHITESPACE_PATTERN = re.compile(r"\s+")
+REQUIRED_RAW_SIGNAL_COLUMNS = {
+    "source",
+    "record_type",
+    "id",
+    "text",
+    "timestamp",
+    "engagement",
+    "permalink",
+    "parent_id",
+    "metadata",
+}
 
 
 def _csv_paths_for_source(input_dir: Path, source_name: str) -> list[Path]:
-    """Return all CSV files under a source directory."""
-    return sorted((input_dir / source_name).glob("*.csv"))
+    """Return all CSV files under a source directory, including nested captures."""
+    return sorted((input_dir / source_name).rglob("*.csv"))
+
+
+def _is_usable_raw_signal_csv(csv_path: Path) -> bool:
+    """Return True when a CSV has the expected raw signal schema."""
+    header = pd.read_csv(csv_path, nrows=0)
+    missing_columns = REQUIRED_RAW_SIGNAL_COLUMNS - set(header.columns)
+    if missing_columns:
+        LOGGER.info(
+            "Skipping non-signal CSV %s; missing required columns: %s",
+            csv_path,
+            sorted(missing_columns),
+        )
+        return False
+
+    return True
 
 
 def load_raw_signals(input_dir: Path = DEFAULT_INPUT_DIR) -> pd.DataFrame:
-    """Load and concatenate all raw Reddit and YouTube CSV files."""
+    """Load and concatenate all usable raw Reddit and YouTube CSV files."""
     source_to_paths = {
         "reddit": _csv_paths_for_source(input_dir, "reddit"),
         "youtube": _csv_paths_for_source(input_dir, "youtube"),
@@ -32,14 +58,27 @@ def load_raw_signals(input_dir: Path = DEFAULT_INPUT_DIR) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
     for source, paths in source_to_paths.items():
         source_rows = 0
+        source_files = 0
         for csv_path in paths:
+            if not _is_usable_raw_signal_csv(csv_path):
+                continue
+
             frame = pd.read_csv(csv_path)
             frames.append(frame)
             source_rows += len(frame)
-        LOGGER.info("Loaded %s rows from %s", source_rows, source)
+            source_files += 1
+        LOGGER.info(
+            "Loaded %s rows from %s usable %s CSV files",
+            source_rows,
+            source_files,
+            source,
+        )
 
     if not frames:
-        return pd.DataFrame()
+        raise ValueError(
+            f"No usable raw signal CSV files found under {input_dir}. "
+            f"Expected CSVs with columns: {sorted(REQUIRED_RAW_SIGNAL_COLUMNS)}"
+        )
 
     return pd.concat(frames, ignore_index=True)
 
