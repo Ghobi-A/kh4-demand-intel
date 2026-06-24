@@ -10,10 +10,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.intent import run_intent_pipeline
-from src.preprocess import run_preprocess_pipeline
-from src.score import run_scoring_pipeline
-from src.sentiment import run_sentiment_pipeline
+from src.intent import run_intent_pipeline  # noqa: E402
+from src.preprocess import run_preprocess_pipeline  # noqa: E402
+from src.score import run_scoring_pipeline  # noqa: E402
+from src.sentiment import run_sentiment_pipeline  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
 
