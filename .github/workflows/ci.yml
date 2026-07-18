@@ -9,21 +9,47 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -e .[ml,app,dev]
 
       - name: Lint with ruff
         run: ruff check src/ tests/ scripts/
 
-      - name: Run tests
-        run: pytest -v
+      - name: Run tests with coverage (unit, ML, rule-baseline regression, leakage)
+        run: pytest -v --cov=src --cov-report=term-missing
+
+      - name: Dataset validation smoke test
+        run: python -m src.ml.data validate
+
+      - name: Tiny training + benchmark smoke test
+        run: |
+          python -m src.ml.benchmark \
+            --models majority rules logistic \
+            --seeds 42 \
+            --output /tmp/ci-ml
+          test -f /tmp/ci-ml/results_summary.csv
+          test -f /tmp/ci-ml/model_comparison.md
+
+      - name: Dashboard import smoke test
+        run: |
+          python - <<'EOF'
+          import sys
+          from types import SimpleNamespace
+          sys.modules.setdefault("streamlit", SimpleNamespace(cache_data=lambda f: f))
+          import app
+          print("dashboard imports OK")
+          EOF
