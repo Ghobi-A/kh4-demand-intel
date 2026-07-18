@@ -1,0 +1,37 @@
+{
+  "total_rows": 200,
+  "class_counts": {
+    "general_discussion": 140,
+    "frustrated_demand": 25,
+    "confusion_barrier": 18,
+    "nostalgia_reactivation": 8,
+    "high_intent": 7,
+    "new_customer_interest": 2
+  },
+  "empty_classes": [
+    "content_drought_fatigue",
+    "expectation_decay"
+  ],
+  "actionable_counts": {
+    "False": 140,
+    "True": 60
+  },
+  "source_distribution": {
+    "youtube": 197,
+    "reddit": 3
+  },
+  "group_id_sources": {
+    "permalink_derived": 200
+  },
+  "unique_groups": 23,
+  "missing_parent_ids": 0,
+  "duplicate_texts": 0,
+  "conflicting_labels": 0,
+  "class_imbalance_ratio": 70.0,
+  "dataset_hash": "450745418479c703",
+  "annotation_version": "audit_v1_2025",
+  "issues": [
+    "Taxonomy classes with zero labelled rows: ['content_drought_fatigue', 'expectation_decay']"
+  ],
+  "valid": true
+}

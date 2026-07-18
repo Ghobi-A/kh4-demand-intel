@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
+ML_REPORT_DIR = Path("reports/ml")
+ARTIFACT_METADATA_PATH = Path("artifacts/hierarchical/metadata.json")
 DEFAULT_SIGNALS_PATH = "data/demo/signals_scored_portfolio.csv"
 DEFAULT_VIDEO_SCORES_PATH = "data/demo/video_scores_portfolio.csv"
 SIGNALS_PATH = Path(os.getenv("SIGNALS_PATH", DEFAULT_SIGNALS_PATH))
@@ -245,24 +248,28 @@ def render_explainability() -> None:
     )
 
 
-def main() -> None:
-    """Run the Streamlit dashboard."""
-    st.set_page_config(
-        page_title="KH4 Demand Intelligence",
-        page_icon="👑",
-        layout="wide",
-    )
-    render_header()
+def model_status() -> str:
+    """Read the model evaluation status from run/artefact metadata."""
+    for path in [ARTIFACT_METADATA_PATH, ML_REPORT_DIR / "run_metadata.json"]:
+        if path.exists():
+            status = json.loads(path.read_text()).get("evaluation_status", "")
+            if status == "final_held_out":
+                return "Final held-out evaluation"
+            if status:
+                return "Development / preliminary evaluation"
+    return "Development / preliminary evaluation"
 
-    if not require_files():
-        return
 
-    signals_df = load_csv(SIGNALS_PATH)
-    video_scores_df = load_csv(VIDEO_SCORES_PATH)
+def _show_markdown_report(path: Path, missing_hint: str) -> bool:
+    if not path.exists():
+        st.info(missing_hint)
+        return False
+    st.markdown(path.read_text())
+    return True
 
-    if not validate_columns(signals_df, video_scores_df):
-        return
 
+def render_demand_tab(signals_df: pd.DataFrame, video_scores_df: pd.DataFrame) -> None:
+    """Original demand-intelligence dashboard content."""
     filters = render_sidebar_filters(signals_df)
     filtered_df = filter_dataframe(signals_df, filters)
 
@@ -274,6 +281,183 @@ def main() -> None:
     render_charts(filtered_df, video_scores_df)
     render_tables(filtered_df, video_scores_df)
     render_explainability()
+
+
+def render_model_performance_tab() -> None:
+    st.header("Model performance")
+    st.caption(f"Model status: {model_status()}")
+    summary_path = ML_REPORT_DIR / "results_summary.csv"
+    if not summary_path.exists():
+        st.info(
+            "No benchmark results found. Run `python -m src.ml.benchmark` to "
+            "generate reports under `reports/ml/`."
+        )
+        return
+    summary = pd.read_csv(summary_path)
+    headline_columns = [
+        column
+        for column in [
+            "model",
+            "n_seeds",
+            "stage1_f1_mean",
+            "stage1_f1_std",
+            "stage1_pr_auc_mean",
+            "stage2_macro_f1_mean",
+            "flat_macro_f1_mean",
+            "e2e_macro_f1_mean",
+            "e2e_macro_f1_std",
+            "lift_at_10pct_mean",
+        ]
+        if column in summary.columns
+    ]
+    st.subheader("Benchmark summary (mean over seeds)")
+    st.dataframe(summary[headline_columns], use_container_width=True)
+
+    figure_columns = st.columns(2)
+    calibration_path = ML_REPORT_DIR / "figures" / "calibration_stage1.png"
+    gains_path = ML_REPORT_DIR / "figures" / "cumulative_gains.png"
+    if calibration_path.exists():
+        figure_columns[0].image(str(calibration_path), caption="Stage 1 calibration")
+    if gains_path.exists():
+        figure_columns[1].image(str(gains_path), caption="Cumulative gains")
+    st.warning(
+        "Preliminary development benchmark on the current 200-row audit "
+        "corpus — not final held-out performance."
+    )
+
+
+def render_model_comparison_tab() -> None:
+    st.header("Model comparison")
+    _show_markdown_report(
+        ML_REPORT_DIR / "model_comparison.md",
+        "No model-comparison report yet. Run `python -m src.ml.benchmark`.",
+    )
+    _show_markdown_report(
+        ML_REPORT_DIR / "rule_model_comparison.md",
+        "No rule-vs-model report yet. Run `python -m src.ml.error_analysis`.",
+    )
+
+
+def render_error_analysis_tab() -> None:
+    st.header("Error analysis")
+    tables_dir = ML_REPORT_DIR / "tables"
+    shown = False
+    for filename, title in [
+        ("false_positives.csv", "Stage 1 false positives"),
+        ("false_negatives.csv", "Stage 1 false negatives"),
+        ("most_confident_errors.csv", "Most confident errors"),
+    ]:
+        path = tables_dir / filename
+        if path.exists():
+            frame = pd.read_csv(path)
+            st.subheader(f"{title} ({len(frame)})")
+            st.dataframe(frame, use_container_width=True)
+            shown = True
+    if not shown:
+        st.info("No error exports yet. Run `python -m src.ml.error_analysis`.")
+
+
+def render_drift_tab() -> None:
+    st.header("Offline distribution-shift analysis")
+    _show_markdown_report(
+        ML_REPORT_DIR / "drift_report.md",
+        "No drift report yet. Run `python -m src.ml.drift`.",
+    )
+
+
+def render_live_inference_tab() -> None:
+    st.header("Live inference")
+    st.caption(f"Model status: {model_status()}")
+    st.warning(
+        "Development model trained on a limited manually labelled portfolio "
+        "dataset. Outputs are illustrative, not production predictions."
+    )
+    text = st.text_area(
+        "Enter a comment to classify",
+        value="Still waiting for news, Square please give us something",
+    )
+    if not st.button("Classify"):
+        return
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+    from src.ml.inference import predict_text
+    from src.score import INTENT_WEIGHTS, SENTIMENT_WEIGHTS
+    from src.sentiment import label_from_compound
+
+    result = predict_text(text)
+    compound = SentimentIntensityAnalyzer().polarity_scores(str(text))["compound"]
+    sentiment_label = label_from_compound(compound)
+    intent_label = result["intent_label"]
+    demand_score = INTENT_WEIGHTS.get(intent_label, 0.0) + SENTIMENT_WEIGHTS.get(
+        sentiment_label, 0.0
+    )
+
+    columns = st.columns(3)
+    if "actionable_probability" in result:
+        columns[0].metric("Actionable probability", f"{result['actionable_probability']:.2f}")
+    elif "rule_confidence_indicator" in result:
+        columns[0].metric("Rule confidence indicator", f"{result['rule_confidence_indicator']:.1f}")
+    columns[1].metric("Predicted intent", intent_label)
+    if "intent_probability" in result:
+        columns[2].metric("Intent probability", f"{result['intent_probability']:.2f}")
+
+    st.write(
+        {
+            "is_actionable": result.get("is_actionable"),
+            "sentiment": sentiment_label,
+            "demand_score_base": round(demand_score, 2),
+            "activation_flag": intent_label
+            in {"high_intent", "nostalgia_reactivation", "new_customer_interest"},
+            "risk_flag": intent_label
+            in {
+                "frustrated_demand",
+                "confusion_barrier",
+                "content_drought_fatigue",
+                "expectation_decay",
+            },
+            "model_name": result.get("model_name"),
+        }
+    )
+
+
+def main() -> None:
+    """Run the Streamlit dashboard."""
+    st.set_page_config(
+        page_title="KH4 Demand Intelligence",
+        page_icon="👑",
+        layout="wide",
+    )
+    render_header()
+    st.caption(f"Model status: {model_status()}")
+
+    tabs = st.tabs(
+        [
+            "Demand Intelligence",
+            "Model Performance",
+            "Model Comparison",
+            "Error Analysis",
+            "Drift",
+            "Live Inference",
+        ]
+    )
+
+    with tabs[0]:
+        if require_files():
+            signals_df = load_csv(SIGNALS_PATH)
+            video_scores_df = load_csv(VIDEO_SCORES_PATH)
+            if validate_columns(signals_df, video_scores_df):
+                render_demand_tab(signals_df, video_scores_df)
+    with tabs[1]:
+        render_model_performance_tab()
+    with tabs[2]:
+        render_model_comparison_tab()
+    with tabs[3]:
+        render_error_analysis_tab()
+    with tabs[4]:
+        render_drift_tab()
+    with tabs[5]:
+        render_live_inference_tab()
+
     st.caption(
         "Unofficial portfolio project. Not affiliated with Square Enix, Disney, "
         "or the Kingdom Hearts franchise. Data sourced from public community discussion."
