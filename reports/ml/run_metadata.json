@@ -1,0 +1,88 @@
+{
+  "run_id": "f1921ed69f29",
+  "experiment_name": "tfidf_group_holdout",
+  "timestamp": "2026-07-18T17:38:39.543911+00:00",
+  "git_commit": "886e6f6",
+  "dataset_hash": "450745418479c703",
+  "annotation_version": "audit_v1_2025",
+  "row_count": 200,
+  "class_counts": {
+    "general_discussion": 140,
+    "frustrated_demand": 25,
+    "confusion_barrier": 18,
+    "nostalgia_reactivation": 8,
+    "high_intent": 7,
+    "new_customer_interest": 2
+  },
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "seed_scope": "split_and_initialisation",
+  "split_method": "group",
+  "evaluation_mode": "group_holdout",
+  "train_rows": 138,
+  "validation_rows": 33,
+  "test_rows": 29,
+  "train_groups": 15,
+  "validation_groups": 4,
+  "test_groups": 4,
+  "models": [
+    "majority",
+    "rules",
+    "logistic",
+    "linear_svm",
+    "char_word_svm"
+  ],
+  "threshold_objective": "f1",
+  "calibration_method": "sigmoid",
+  "evaluation_status": "development_preliminary",
+  "config": {
+    "experiment_name": "tfidf_group_holdout",
+    "input_path": "reports/audits/intent_audit_corrected.csv",
+    "output_dir": "reports/ml",
+    "models": [
+      "majority",
+      "rules",
+      "logistic",
+      "linear_svm",
+      "char_word_svm"
+    ],
+    "seeds": [
+      42,
+      43,
+      44,
+      45,
+      46
+    ],
+    "split": {
+      "method": "group",
+      "train": 0.7,
+      "validation": 0.15,
+      "test": 0.15
+    },
+    "threshold": {
+      "objective": "f1",
+      "min_precision": null,
+      "min_recall": null
+    },
+    "calibration_method": "sigmoid",
+    "ranking_percentages": [
+      0.05,
+      0.1,
+      0.2
+    ],
+    "ranking_k_values": [
+      10,
+      25,
+      50,
+      100
+    ],
+    "evaluation_status": "development_preliminary",
+    "seed_scope": "split_and_initialisation"
+  },
+  "note": "Preliminary development benchmark on the current 200-row audit corpus. Not final held-out performance. Repeated-seed spread describes variability across seeded group splits and model initialisations, not a population confidence guarantee."
+}

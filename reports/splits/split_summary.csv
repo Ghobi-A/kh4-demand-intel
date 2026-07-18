@@ -1,0 +1,4 @@
+split,rows,groups,seed,evaluation_mode
+train,138,15,42,group_holdout
+validation,33,4,42,group_holdout
+test,29,4,42,group_holdout
