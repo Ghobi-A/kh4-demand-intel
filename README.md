@@ -169,6 +169,42 @@ are absent.
 
 ## 12. Reproducibility
 
+### Ingesting YouTube comments
+
+Comment data is not committed (see `.gitignore`); regenerate it from the
+video seed list. Requires `YOUTUBE_API_KEY` in `.env`.
+
+```bash
+cp data/raw/youtube/video_seed_list.example.csv data/raw/youtube/video_seed_list.csv
+# edit the seed list to taste; only the video_id column is required
+
+python -m src.scraper_youtube --seed-list --max-results 100
+```
+
+This fetches comments for every listed video into
+`data/raw/youtube/youtube_comments_<video_id>.csv` and writes a provenance
+record to `reports/tables/youtube_fetch_manifest.csv`. Videos that already
+have an output CSV are skipped so re-runs do not burn API quota — pass
+`--force` to re-fetch, and `--fetch-metadata` to also record each video's
+real title and channel (the seed list's own `title`/`channel` columns are
+hand-written and unverified). A single unavailable video is recorded as
+`failed` in the manifest without aborting the batch; the command exits
+non-zero if any video failed.
+
+Single-video mode is unchanged:
+
+```bash
+python -m src.scraper_youtube --video-id <YT_VIDEO_ID> --max-results 100
+```
+
+Then run the analysis pipeline:
+
+```bash
+python scripts/run_pipeline.py    # preprocess → sentiment → intent → score → events
+```
+
+### Model reproducibility
+
 ```bash
 pip install -e .[ml,dev]
 
