@@ -365,6 +365,54 @@ def render_drift_tab() -> None:
     )
 
 
+def render_events_tab() -> None:
+    st.header("Event-relative sentiment")
+    events_signals_path = Path(os.getenv("EVENTS_SIGNALS_PATH", "data/processed/signals_events.csv"))
+    deltas_path = Path(os.getenv("EVENT_DELTAS_PATH", "reports/tables/event_sentiment_deltas.csv"))
+
+    missing = [path for path in [events_signals_path, deltas_path] if not path.exists()]
+    if missing:
+        st.info(
+            "No event-relative outputs yet. Run the full pipeline "
+            "(`python scripts/run_pipeline.py`) or `python -m src.events` to "
+            "generate:\n" + "\n".join(f"- `{path}`" for path in missing)
+        )
+        return
+
+    deltas = load_csv(deltas_path)
+    st.subheader("Sentiment by event window")
+    st.caption(
+        "Windows are defined by the nearest prior event in "
+        "`data/reference/events.csv` (e.g. pre-announcement vs post-D23); "
+        "`delta_vs_prev_window` shows the mean VADER compound shift between "
+        "consecutive windows."
+    )
+    st.dataframe(deltas, use_container_width=True)
+
+    if "mean_vader_compound" in deltas.columns:
+        st.bar_chart(deltas.set_index("event_window")["mean_vader_compound"])
+
+    signals = load_csv(events_signals_path)
+    required = {"event_window", "days_since_event", "vader_compound"}
+    missing_columns = required - set(signals.columns)
+    if missing_columns:
+        st.warning(
+            f"Missing columns in `{events_signals_path}`: `{sorted(missing_columns)}`. "
+            "Regenerate with `python -m src.events`."
+        )
+        return
+
+    st.subheader("Sentiment vs days since event")
+    windows = sorted_unique_values(signals, "event_window")
+    selected = st.multiselect("Event windows", options=windows, default=windows)
+    subset = signals[signals["event_window"].astype(str).isin(selected)]
+    subset = subset.dropna(subset=["days_since_event"])
+    if subset.empty:
+        st.info("No rows with event-relative timestamps for the selected windows.")
+        return
+    st.scatter_chart(subset, x="days_since_event", y="vader_compound", color="event_window")
+
+
 def render_live_inference_tab() -> None:
     st.header("Live inference")
     st.caption(f"Model status: {model_status()}")
@@ -437,6 +485,7 @@ def main() -> None:
             "Model Comparison",
             "Error Analysis",
             "Drift",
+            "Events",
             "Live Inference",
         ]
     )
@@ -456,6 +505,8 @@ def main() -> None:
     with tabs[4]:
         render_drift_tab()
     with tabs[5]:
+        render_events_tab()
+    with tabs[6]:
         render_live_inference_tab()
 
     st.caption(
