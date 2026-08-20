@@ -22,6 +22,7 @@ data/raw/*
 !data/raw/youtube/
 data/raw/youtube/*
 !data/raw/youtube/video_seed_list.example.csv
+!data/raw/youtube/video_seed_list.csv
 data/processed/*
 !data/processed/signals_scored.csv
 models/
