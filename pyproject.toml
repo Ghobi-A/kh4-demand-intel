@@ -30,7 +30,7 @@ app = ["streamlit>=1.35,<2"]
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1",
-    "ruff>=0.1.0",
+    "ruff>=0.1.0,<0.16",
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
 ]
