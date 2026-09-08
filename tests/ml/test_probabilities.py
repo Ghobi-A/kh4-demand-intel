@@ -1,0 +1,137 @@
+"""Tests for calibrated actionable probabilities and their provenance."""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from src.ml.hierarchy import HierarchicalClassifier
+from src.ml.probabilities import (
+    PROBABILITY_COLUMN,
+    PROVENANCE_COLUMN,
+    SOURCE_OOF,
+    SOURCE_PERSISTED,
+    SOURCE_UNAVAILABLE,
+    ProbabilityUnavailableError,
+    attach_actionable_probabilities,
+    build_probabilities,
+    group_folds,
+    oof_actionable_probabilities,
+)
+from tests.ml.conftest import make_fixture_frame
+
+
+def test_group_folds_never_split_a_discussion_group() -> None:
+    frame = make_fixture_frame()
+
+    folds = group_folds(frame, n_folds=4, seed=42)
+
+    assert sum(len(fold) for fold in folds) == len(frame)
+    seen: dict[str, int] = {}
+    for index, fold in enumerate(folds):
+        for group in frame.iloc[fold]["parent_id"]:
+            assert seen.setdefault(group, index) == index
+
+
+def test_group_folds_are_deterministic_for_a_seed() -> None:
+    frame = make_fixture_frame()
+
+    first = [fold.tolist() for fold in group_folds(frame, seed=7)]
+    second = [fold.tolist() for fold in group_folds(frame, seed=7)]
+
+    assert first == second
+
+
+def test_oof_probabilities_are_out_of_sample_for_every_row() -> None:
+    frame = make_fixture_frame()
+
+    probabilities = oof_actionable_probabilities(frame, n_folds=4, seed=42)
+
+    assert probabilities
+    assert set(probabilities).issubset(set(frame["record_id"].astype(str)))
+    assert all(0.0 <= value <= 1.0 for value in probabilities.values())
+    # Not all identical: a constant would signal a degenerate fit.
+    assert len(set(np.round(list(probabilities.values()), 6))) > 1
+
+
+def test_oof_fold_model_never_sees_the_row_it_scores(monkeypatch) -> None:
+    frame = make_fixture_frame()
+    observed: list[tuple[set, set]] = []
+
+    import src.ml.probabilities as probabilities_module
+
+    original = probabilities_module.train_stage1
+
+    def _record(model_name, split, config, seed):
+        observed.append((set(split.train["record_id"]), set(split.validation["record_id"])))
+        return original(model_name, split, config, seed)
+
+    monkeypatch.setattr(probabilities_module, "train_stage1", _record)
+    result = oof_actionable_probabilities(frame, n_folds=4, seed=42)
+
+    assert result
+    groups_by_record = dict(zip(frame["record_id"].astype(str), frame["parent_id"].astype(str)))
+    for train_ids, validation_ids in observed:
+        fitted_groups = {groups_by_record[str(r)] for r in train_ids | validation_ids}
+        scored = set(groups_by_record) - {str(r) for r in train_ids | validation_ids}
+        scored_groups = {groups_by_record[r] for r in scored}
+        assert not (fitted_groups & scored_groups)
+
+
+def test_labelled_rows_take_out_of_fold_values_not_in_sample_ones() -> None:
+    signals = pd.DataFrame({"id": ["r1", "r2"], "text": ["buying it", "nice music"]})
+    model = _StubModel(0.42)
+
+    scored = attach_actionable_probabilities(signals, model, {"r1": 0.9})
+
+    assert scored.loc[0, PROVENANCE_COLUMN] == SOURCE_OOF
+    assert scored.loc[0, PROBABILITY_COLUMN] == pytest.approx(0.9)
+    assert scored.loc[1, PROVENANCE_COLUMN] == SOURCE_PERSISTED
+    assert scored.loc[1, PROBABILITY_COLUMN] == pytest.approx(0.42)
+
+
+def test_rows_without_text_are_unavailable_rather_than_guessed() -> None:
+    signals = pd.DataFrame({"id": ["r1"], "text": ["   "]})
+
+    scored = attach_actionable_probabilities(signals, _StubModel(0.42), {})
+
+    assert scored.loc[0, PROVENANCE_COLUMN] == SOURCE_UNAVAILABLE
+    assert np.isnan(scored.loc[0, PROBABILITY_COLUMN])
+
+
+def test_uncalibrated_model_yields_no_probabilities_instead_of_rule_confidence() -> None:
+    signals = pd.DataFrame({"id": ["r1"], "text": ["buying it"]})
+
+    scored = attach_actionable_probabilities(signals, _StubModel(0.42, probability=False), {})
+
+    assert scored.loc[0, PROVENANCE_COLUMN] == SOURCE_UNAVAILABLE
+    assert np.isnan(scored.loc[0, PROBABILITY_COLUMN])
+    # The 0.7/0.3 rule confidence indicator must never appear as a probability.
+    assert 0.7 not in set(scored[PROBABILITY_COLUMN].dropna())
+
+
+def test_build_probabilities_reports_unavailable_rather_than_fabricating(monkeypatch) -> None:
+    import src.ml.probabilities as probabilities_module
+
+    def _fail(**kwargs):
+        raise ProbabilityUnavailableError("no artefacts")
+
+    monkeypatch.setattr(probabilities_module, "ensure_hierarchical_model", _fail)
+
+    with pytest.raises(ProbabilityUnavailableError):
+        build_probabilities(pd.DataFrame({"id": ["a"], "text": ["hi"]}))
+
+
+class _StubModel(HierarchicalClassifier):
+    """Minimal stand-in exposing the Stage 1 scoring contract."""
+
+    def __init__(self, value: float, probability: bool = True):
+        self.value = value
+        self.calibrator = None
+        self.stage1 = type(
+            "Stage1", (), {"score_type": "probability" if probability else "margin"}
+        )()
+
+    def stage1_scores(self, texts):
+        return np.full(len(list(texts)), self.value, dtype=float)

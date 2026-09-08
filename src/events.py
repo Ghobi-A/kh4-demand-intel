@@ -12,6 +12,7 @@ import logging
 import re
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 LOGGER = logging.getLogger(__name__)
@@ -25,6 +26,14 @@ DEFAULT_FIGURE_PATH = Path("reports/figures/sentiment_by_event.png")
 PRE_EVENT_LABEL = "pre_announcement"
 
 REQUIRED_EVENT_COLUMNS = {"event_date", "event_name"}
+
+# Event types that count as a major public announcement / a trailer drop.
+MAJOR_ANNOUNCEMENT_TYPES = {"trailer", "announcement", "showcase", "release_date", "release"}
+TRAILER_TYPES = {"trailer", "showcase"}
+
+# How an event's modelled influence decays after it happens.
+DEFAULT_EVENT_WINDOW_WEEKS = 4
+DEFAULT_EVENT_HALF_LIFE_WEEKS = 3.0
 
 
 def _slugify(name: str) -> str:
@@ -53,6 +62,24 @@ def load_events(path: Path = DEFAULT_EVENTS_PATH) -> pd.DataFrame:
 
     events = events.sort_values("event_date").reset_index(drop=True)
     events["event_window"] = "post_" + events["event_name"].map(_slugify)
+
+    event_type = (
+        events["event_type"].astype(str).str.strip().str.lower()
+        if "event_type" in events.columns
+        else pd.Series("", index=events.index)
+    )
+    events["major_announcement_flag"] = event_type.isin(MAJOR_ANNOUNCEMENT_TYPES).astype(int)
+    events["trailer_flag"] = event_type.isin(TRAILER_TYPES).astype(int)
+
+    # ``announced_date`` records when an event became publicly known. Without it
+    # an event is only knowable once it happens, which is the safe assumption
+    # for backtesting: see event_features_for_periods.
+    if "announced_date" in events.columns:
+        announced = pd.to_datetime(events["announced_date"], errors="coerce", utc=True)
+        events["announced_date"] = announced.fillna(events["event_date"])
+    else:
+        events["announced_date"] = events["event_date"]
+
     return events
 
 
@@ -237,3 +264,82 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def event_features_for_periods(
+    period_starts,
+    events: pd.DataFrame,
+    window_weeks: int = DEFAULT_EVENT_WINDOW_WEEKS,
+    half_life_weeks: float = DEFAULT_EVENT_HALF_LIFE_WEEKS,
+    origin: pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """Build period-level event features using the same nearest-prior-event rule.
+
+    ``origin`` makes the features honest for backtesting. When it is given, an
+    event contributes only if it had been publicly announced at or before the
+    forecast origin (``announced_date <= origin``). Events announced later are
+    invisible at that origin, so a model trained there cannot borrow knowledge
+    that did not yet exist. With no origin the full retrospective calendar is
+    used, which is correct for descriptive tables and is labelled as such.
+    """
+    periods = pd.DatetimeIndex(pd.to_datetime(pd.Series(list(period_starts)), utc=True))
+    frame = pd.DataFrame({"period_start": periods})
+
+    usable = events.copy()
+    if origin is not None:
+        origin_ts = pd.Timestamp(origin)
+        if origin_ts.tzinfo is None:
+            origin_ts = origin_ts.tz_localize("UTC")
+        usable = usable[usable["announced_date"] <= origin_ts]
+
+    empty = pd.DataFrame(
+        {
+            "period_start": periods,
+            "last_event_name": PRE_EVENT_LABEL,
+            "event_window": PRE_EVENT_LABEL,
+            "days_since_event": pd.NA,
+            "weeks_since_event": pd.NA,
+            "event_active": 0,
+            "event_decay": 0.0,
+            "event_type": "",
+            "major_announcement_flag": 0,
+            "trailer_flag": 0,
+            "event_known_at_origin": bool(origin is not None),
+        }
+    )
+    if usable.empty or frame.empty:
+        return empty
+
+    columns = ["event_date", "event_name", "event_window", "major_announcement_flag", "trailer_flag"]
+    if "event_type" in usable.columns:
+        columns.append("event_type")
+    lookup = usable.sort_values("event_date")[columns].rename(
+        columns={"event_name": "last_event_name"}
+    )
+
+    merged = pd.merge_asof(
+        frame.sort_values("period_start"),
+        lookup,
+        left_on="period_start",
+        right_on="event_date",
+        direction="backward",
+    )
+
+    days = (merged["period_start"] - merged["event_date"]).dt.total_seconds() / 86400.0
+    merged["days_since_event"] = days
+    merged["weeks_since_event"] = days / 7.0
+    merged["event_active"] = (
+        merged["weeks_since_event"].notna() & (merged["weeks_since_event"] < window_weeks)
+    ).astype(int)
+    decay = np.power(0.5, merged["weeks_since_event"] / float(half_life_weeks))
+    merged["event_decay"] = decay.fillna(0.0).clip(lower=0.0)
+    merged["last_event_name"] = merged["last_event_name"].fillna(PRE_EVENT_LABEL)
+    merged["event_window"] = merged["event_window"].fillna(PRE_EVENT_LABEL)
+    if "event_type" not in merged.columns:
+        merged["event_type"] = ""
+    merged["event_type"] = merged["event_type"].fillna("")
+    merged["major_announcement_flag"] = merged["major_announcement_flag"].fillna(0).astype(int)
+    merged["trailer_flag"] = merged["trailer_flag"].fillna(0).astype(int)
+    merged["event_known_at_origin"] = bool(origin is not None)
+
+    return merged.drop(columns=["event_date"]).reset_index(drop=True)

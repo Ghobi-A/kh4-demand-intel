@@ -25,6 +25,9 @@ data/raw/youtube/*
 !data/raw/youtube/video_seed_list.csv
 data/processed/*
 !data/processed/signals_scored.csv
+# Weekly aggregates carry no comment text, so they are safe to commit.
+!data/processed/weekly_demand_signals.csv
+!data/processed/weekly_demand_signals.meta.json
 models/
 
 # OS
@@ -41,3 +44,7 @@ artifacts/
 # Coverage
 .coverage
 htmlcov/
+
+# Posterior samples are large and go stale; regenerate with --save-posterior
+*.posterior.npz
+reports/**/posterior_samples.npz
