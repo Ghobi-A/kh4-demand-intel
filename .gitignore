@@ -45,6 +45,6 @@ artifacts/
 .coverage
 htmlcov/
 
-# Posterior samples are large and go stale; regenerate with --save-posterior
-*.posterior.npz
-reports/**/posterior_samples.npz
+# Posterior samples are large and go stale; regenerate them locally with
+# `--save-posterior` on scripts/run_forecasting.py or scripts/run_mmm.py
+*.npz
