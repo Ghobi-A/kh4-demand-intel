@@ -24,13 +24,23 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[ml,app,dev]
+          pip install -e .[ml,app,dev,forecast,api]
 
       - name: Lint with ruff
-        run: ruff check src/ tests/ scripts/
+        run: ruff check src/ tests/ scripts/ app.py
 
-      - name: Run tests with coverage (unit, ML, rule-baseline regression, leakage)
-        run: pytest -v --cov=src --cov-report=term-missing
+      - name: Package import check
+        run: |
+          python - <<'PY'
+          import src, src.ml, src.forecasting, src.mmm, src.services, src.api
+          print("all subpackages import")
+          PY
+
+      # Posterior sampling is expensive and its result does not vary by Python
+      # version, so the smoke tests run once in the pymc-smoke job below rather
+      # than on every matrix entry.
+      - name: Run tests (excluding PyMC sampling smoke tests)
+        run: pytest -v -m "not pymc_smoke" --cov=src --cov-report=term-missing
 
       - name: Dataset validation smoke test
         run: python -m src.ml.data validate
@@ -44,12 +54,60 @@ jobs:
           test -f /tmp/ci-ml/results_summary.csv
           test -f /tmp/ci-ml/model_comparison.md
 
+      - name: Temporal dataset smoke test (demo sample)
+        run: |
+          python scripts/build_temporal_dataset.py --demo --output /tmp/ci-weekly.csv
+          test -f /tmp/ci-weekly.csv
+          python - <<'PY'
+          import json
+          meta = json.load(open("/tmp/ci-weekly.meta.json"))
+          assert meta["sample_only"] is True, meta
+          assert meta["evaluation_status"] == "demo_only", meta
+          print("demo temporal build stamped correctly")
+          PY
+
+      - name: Forecasting baseline smoke test (no Bayesian sampling)
+        run: |
+          python scripts/run_forecasting.py \
+            --input /tmp/ci-weekly.csv \
+            --report-dir /tmp/ci-forecasting \
+            --demo --no-bayesian --min-train 20 --max-origins 5
+          test -f /tmp/ci-forecasting/model_comparison.csv
+          test -f /tmp/ci-forecasting/forecast_report.md
+          test -f /tmp/ci-forecasting/bias_flags.json
+
+      - name: Synthetic MMM generation check
+        run: |
+          python -m src.mmm.synthetic
+          git diff --exit-code data/synthetic/mmm_weekly_synthetic.csv
+
       - name: Dashboard import smoke test
         run: |
-          python - <<'EOF'
+          python - <<'PY'
           import sys
           from types import SimpleNamespace
           sys.modules.setdefault("streamlit", SimpleNamespace(cache_data=lambda f: f))
           import app
           print("dashboard imports OK")
-          EOF
+          PY
+
+  pymc-smoke:
+    # Integration check that each Bayesian path runs end to end. The draw counts
+    # are far too small to say anything about convergence, and these results are
+    # never treated as substantive diagnostics.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[ml,dev,forecast]
+
+      - name: Run PyMC smoke tests
+        run: pytest -v -m pymc_smoke

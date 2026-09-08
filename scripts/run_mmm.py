@@ -50,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--draws", type=int, default=1000)
     parser.add_argument("--tune", type=int, default=1000)
     parser.add_argument("--chains", type=int, default=2)
+    parser.add_argument("--target-accept", type=float, default=0.95)
     parser.add_argument(
         "--correlated-channels",
         action="store_true",
@@ -75,7 +76,11 @@ def main() -> None:
     fit = fit_mmm(
         data,
         config=MMMSamplerConfig(
-            draws=args.draws, tune=args.tune, chains=args.chains, seed=args.seed
+            draws=args.draws,
+            tune=args.tune,
+            chains=args.chains,
+            seed=args.seed,
+            target_accept=args.target_accept,
         ),
     )
 

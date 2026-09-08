@@ -59,7 +59,9 @@ class MMMSamplerConfig:
     draws: int = 1000
     tune: int = 1000
     chains: int = 2
-    target_accept: float = 0.9
+    # The media transforms create a mildly awkward posterior geometry, so this
+    # runs tighter than the usual 0.9 to keep divergences down.
+    target_accept: float = 0.95
     seed: int = 42
     progressbar: bool = False
 

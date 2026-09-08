@@ -1,6 +1,8 @@
-# Behavioural Intent Classification & Demand Intelligence
+# Behavioural Demand Intelligence, Forecasting & Marketing Science
 
-**Supervised NLP analysis of public Reddit and YouTube community discussion around Kingdom Hearts IV**
+**Behavioural demand intelligence, Bayesian forecasting and marketing-science
+decision support built on public Kingdom Hearts IV community signals, plus a
+separately labelled synthetic Marketing Mix Modelling experiment.**
 
 **Live dashboard:** https://kh4-demand-intel.streamlit.app
 
@@ -19,6 +21,41 @@ or the Kingdom Hearts franchise. Data sourced from public community
 discussion.**
 
 ---
+
+## Technical highlights
+
+- Supervised behavioural-intent NLP over public Reddit and YouTube discussion
+- Calibrated actionable-signal probabilities with group-aware, out-of-fold provenance
+- Real timestamp recovery and reproducible weekly temporal aggregation
+- Rolling-origin (walk-forward) demand forecasting with explicit leakage tests
+- Bayesian forecasting in PyMC, with the likelihood chosen to fit the target
+- Forecast bias, interval-calibration and reliability monitoring
+- Event-response modelling that is honest about what was knowable when
+- Synthetic Bayesian Marketing Mix Model with adstock and saturation
+- Posterior scenario simulation for both behavioural and synthetic-marketing questions
+- Streamlit analytical application and an optional thin FastAPI service
+- CI-tested modular Python throughout
+
+## The central question
+
+> How can public behavioural signals around Kingdom Hearts IV be turned into
+> observable demand proxies, forecast over time, monitored for reliability, and
+> used alongside a clearly synthetic Marketing Mix Modelling experiment to
+> demonstrate marketing decision-support methods?
+
+Five things are kept strictly apart, in code and in every report:
+
+| | What it is |
+|---|---|
+| 1. Real public data | Reddit and YouTube comments about KH4 |
+| 2. Derived demand proxies | Weekly aggregates of that discussion |
+| 3. Forecasts | Predictions of those proxies |
+| 4. Synthetic marketing data | Simulated spend, price, promotion and sales |
+| 5. Model outputs | Estimates, always with their assumptions |
+
+**Community signals are never presented as unit sales.** Kingdom Hearts IV is
+unreleased. No Square Enix sales, budgets, ROAS, pricing decisions or campaign
+data appear anywhere in this project, and none are inferred.
 
 ## 1. Problem
 
@@ -82,6 +119,20 @@ Actionable-signal ranking (Precision@K, Recall@K, Lift@K)
 Heuristic demand / activation / risk scoring (unchanged)
         ↓
 Evaluation + error analysis → Streamlit dashboard
+        ↓
+Temporal aggregation (weekly demand proxies)
+        ↓
+Forecasting → rolling-origin validation → monitoring → scenarios
+```
+
+Separately, and never mixed with the above:
+
+```
+Synthetic spend / price / promotion / seasonality  (SYNTHETIC — not Square Enix data)
+        ↓
+Bayesian MMM (adstock → saturation → contribution)
+        ↓
+Budget-reallocation scenario simulator
 ```
 
 The supervised layer (`src/ml/`) is fully separable from the heuristic
@@ -162,12 +213,137 @@ streamlit run app.py
 ```
 
 Tabs: **Demand Intelligence** (original dashboard, unchanged), **Model
-Performance**, **Model Comparison**, **Error Analysis**, **Drift**, and
-**Live Inference** (development-model disclaimer included). The app
-shows the current model status and degrades gracefully when report files
-are absent.
+Performance**, **Model Comparison**, **Error Analysis**, **Drift**,
+**Events**, **Forecasting**, **Forecast Monitoring**, **Marketing Science
+Lab**, **Scenario Planner**, and **Live Inference**. The app shows the
+current model status, renders generated report artefacts rather than
+fitting models at page load, and degrades gracefully when report files are
+absent.
 
-## 12. Reproducibility
+
+## 12. Temporal foundations and demand proxies
+
+Signal timestamps are the creation time supplied by the source API, parsed to
+timezone-aware UTC in one place (`src/timestamps.py`) with an explicit report of
+what was valid, missing or invalid. Scrape time is never substituted for
+creation time, and a missing timestamp stays missing rather than being invented.
+
+`src/temporal.py` aggregates scored signals into complete weekly periods. The
+headline column is the **behavioural demand proxy**:
+
+```
+actionable_probability_mass_t = sum over comments i observed in t of P(actionable_i)
+```
+
+This is an **expected actionable-signal volume** derived from the supervised
+classifier's calibrated probabilities. It is **not** expected purchases, revenue
+or units. Probabilities for rows in the labelled corpus are computed
+**out-of-fold** with group-aware folds, so no row is scored by a model that saw
+its own discussion group, and every row records its `probability_source`. The
+rule baseline's 0.7/0.3 confidence indicator is never used as a probability.
+
+Empty weeks keep zero counts but undefined rates: a week with no comments
+observed nothing about a rate, and recording 0% would invent an observation.
+
+## 13. Forecasting
+
+Validation is **rolling-origin only**; random splits are never used. Two leakage
+properties are covered by tests: future values cannot change an earlier origin's
+forecast, and event features are gated on `announced_date`, so an event that had
+not been publicly announced at a forecast origin contributes nothing there.
+
+Simple baselines (naive, trailing mean, seasonal naive, exponential smoothing,
+ridge on lags plus event features) remain eligible to win. Model complexity
+follows a coverage audit of the actual history rather than assumption.
+
+The Bayesian likelihood follows the target: a **hurdle** model (Bernoulli for
+whether a week is non-zero, Gamma for its level) for the continuous demand
+proxy, which is legitimately zero in quiet weeks and is never rounded; Negative
+Binomial for integer counts; Binomial **on the underlying counts** for rates.
+
+Metrics are MAE, RMSE, WAPE, signed bias, interval coverage and width, with MASE
+only where valid. Ordinary MAPE is deliberately absent because zero weeks make
+it unstable. Model selection uses WAPE first but demotes a leader that shows
+persistent directional bias or badly calibrated intervals.
+
+Monitoring tracks rolling error, signed bias and interval hits across origins,
+and flags persistent over- or under-forecasting at configurable thresholds.
+
+Full methodology: `docs/FORECASTING.md`.
+
+## 14. Synthetic marketing science lab
+
+**SYNTHETIC MARKETING SCIENCE DEMONSTRATION. This is not Square Enix data.**
+
+Kingdom Hearts IV is unreleased, so no media spend, pricing, promotion or sales
+data exists for it. Rather than invent figures, `src/mmm/` simulates a weekly
+marketing dataset from an explicit process and records the true parameters
+beside it. That is what makes it checkable: the model is scored on whether it
+recovers the process that generated the data.
+
+Geometric adstock, Hill saturation, a Bayesian MMM in PyMC, posterior channel
+contributions with credible intervals, price and promotion effects, and a
+budget-reallocation scenario simulator. On the committed run the model recovers
+the price, promotion and event directions and keeps every true contribution
+inside its credible interval, but **swaps the top two channels** — a genuine
+identifiability limitation that is reported rather than tuned away.
+
+Synthetic data lives only in `data/synthetic/` and `reports/mmm/`, every row
+carries `data_type = synthetic`, and the fitter refuses non-synthetic input.
+
+Full details: `docs/MMM_LAB.md`.
+
+## 15. Analytical interfaces
+
+The Streamlit app gains **Forecasting**, **Forecast Monitoring**, **Marketing
+Science Lab** and **Scenario Planner** tabs. The scenario planner separates
+`REAL BEHAVIOURAL SCENARIO` from `SYNTHETIC MARKETING SCENARIO` explicitly.
+
+An optional thin FastAPI service exposes the same service layer:
+
+```bash
+pip install -e .[api]
+uvicorn src.api:app --reload
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Which generated artefacts are available |
+| `GET /forecast/summary` | Headline forecasting results and bias flags |
+| `POST /forecast/scenario` | Behavioural demand scenario |
+| `POST /mmm/scenario` | Synthetic marketing scenario |
+
+Handlers contain no business logic; both interfaces call `src/services.py`, so
+they cannot answer differently. Neither fits a model at request time.
+
+## 16. Reproducing the temporal and marketing work
+
+```bash
+pip install -e .[ml,app,dev,forecast,api]
+
+# Everything, over the full local dataset
+python scripts/run_temporal_pipeline.py --input data/processed/signals_scored.csv --save-posterior
+
+# Or step by step
+python scripts/build_temporal_dataset.py --input data/processed/signals_scored.csv
+python scripts/run_forecasting.py --save-posterior
+python scripts/run_mmm.py --save-posterior
+```
+
+The committed results under `reports/demo_forecasting/` come from the
+class-stratified 304-row portfolio extract, which is **not volume-representative**.
+They are stamped `sample_only = true`, `volume_representative = false` and
+`evaluation_status = demo_only`, and exist only to show the pipeline runs.
+`reports/forecasting/` is reserved for a run over the full canonical dataset.
+
+Optional, network-dependent: recover creation timestamps for rows collected
+before they were handled correctly.
+
+```bash
+python -m src.enrich_timestamps --input data/processed/signals_clean.csv --output data/processed/signals_clean.csv
+```
+
+## 17. Reproducibility
 
 ### Ingesting YouTube comments
 
@@ -224,23 +400,34 @@ seeds, split/group counts, frozen threshold, and
 `evaluation_status = development_preliminary`
 (`reports/ml/run_metadata.json`).
 
-## 13. Limitations
+## 18. Limitations
 
 - 200 labelled rows across 23 discussion groups: split variance
   dominates; all supervised results are preliminary.
 - Two taxonomy classes have no labelled examples.
 - 197/200 labelled rows are YouTube; Reddit performance is unmeasured.
 - Labels were sampled around rule-classifier behaviour (selection bias).
-- Temporal dynamics are unmodelled (timestamps not yet recovered).
 - `demand_score` is a heuristic decision-support signal, not a forecast.
+- Community signals are not unit sales; KH4 is unreleased, so no purchase
+  conversion exists to validate any forecast against.
+- Comment volume is platform-dependent and reflects what was collected and how
+  platform algorithms surfaced it, not total public interest.
+- Event coefficients are associations, not causal effects.
+- Forecast uncertainty grows with horizon; long-range forecasts on this history
+  are weak.
+- The committed forecasting results are a demo smoke run over a stratified
+  sample and are not volume-representative.
+- The marketing mix model is fitted to synthetic data; its channel
+  contributions are only partially identified even there.
 - See `docs/MODEL_CARD.md` and `docs/DATA_CARD.md`.
 
-## 14. Roadmap
+## 19. Roadmap
 
 1. Re-audit existing labels via `reports/annotation/review_queue.csv`
    using `docs/ANNOTATION_GUIDE.md`.
 2. Expand the labelled corpus using the active-learning queue.
-3. Recover `created_at` timestamps to enable temporal holdout.
+3. Run the forecasting pipeline over the full local dataset and publish the
+   measured results to `reports/forecasting/`.
 4. Freeze a final test set; re-run the benchmark with
    `evaluation_status = final_held_out`.
 5. Populate the gated CV metrics in `reports/portfolio_summary.md`.
