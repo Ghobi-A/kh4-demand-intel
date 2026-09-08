@@ -3,8 +3,8 @@
 > **Demo smoke run — not a substantive result.** This report was generated from the class-stratified 304-row portfolio extract, which is not volume-representative. It exists to prove the pipeline runs end to end. Measured forecasting results require a run over the full canonical dataset.
 
 
-- Run: `6604d9e3f4d4` at 2026-09-08T15:22:18.896062+00:00
-- Git commit: `a1a791f`
+- Run: `c8d4c90dcaa6` at 2026-09-08T16:03:39.326767+00:00
+- Git commit: `ab063db`
 - Input: `data/demo/weekly_demand_signals_demo.csv` (hash `470790bb1fc09117`)
 - Evaluation status: `demo_only`
 - Volume representative: False
@@ -36,49 +36,64 @@ Rolling-origin (walk-forward) backtesting: minimum train 12 periods, horizon 2, 
 
 ### Model comparison
 
-| Model | WAPE | MAE | RMSE | Signed bias | Coverage | Interval width | Persistent bias |
-|---|---|---|---|---|---|---|---|
-| exponential_smoothing | 0.999 | 0.613 | 2.088 | -0.049 | 0.742 | 0.770 | yes |
-| mean | 1.027 | 0.631 | 2.333 | -0.256 | 0.833 | 0.723 | yes |
-| naive | 1.034 | 0.635 | 2.127 | -0.050 | 0.742 | 0.767 | yes |
+| Model | WAPE | MAE | RMSE | Signed bias | Coverage | Interval width | Persistent bias | Origins |
+|---|---|---|---|---|---|---|---|---|
+| bayesian | 0.936 | 9.525 | 13.727 | -9.257 | 0.333 | 2.706 | yes | 3 |
+| exponential_smoothing | 0.986 | 0.610 | 2.180 | -0.045 | 0.747 | 0.772 | yes | 99 |
+| naive | 1.019 | 0.630 | 2.217 | -0.045 | 0.773 | 0.767 | yes | 99 |
+| mean | 1.021 | 0.632 | 2.383 | -0.263 | 0.874 | 0.826 | yes | 99 |
 
-**Selected model: `exponential_smoothing`**
+#### Matched-origin comparison (includes the Bayesian model)
 
-- Lowest WAPE: exponential_smoothing (0.999).
+Refitting the posterior at every origin is expensive, so the Bayesian model is scored on the most recent origins. This table re-scores every model on exactly those origins, so no two models are compared across different evaluation windows.
+
+| Model | WAPE | MAE | RMSE | Signed bias | Coverage | Interval width | Persistent bias | Origins |
+|---|---|---|---|---|---|---|---|---|
+| naive | 0.816 | 8.305 | 11.734 | -2.590 | 0.333 | 1.003 | yes | 3 |
+| exponential_smoothing | 0.820 | 8.345 | 11.783 | -2.481 | 0.333 | 1.070 | yes | 3 |
+| mean | 0.861 | 8.767 | 13.053 | -8.665 | 0.333 | 2.014 | yes | 3 |
+| bayesian | 0.936 | 9.525 | 13.727 | -9.257 | 0.333 | 2.706 | yes | 3 |
+
+**Selected model: `naive`**
+
+- Lowest WAPE: naive (0.816).
 - Every candidate shows persistent bias or poor interval calibration; the lowest-WAPE model is reported, but none of them is reliable on this history.
+- Selection used the origins on which every model, including the Bayesian one, was scored.
+- The Bayesian model was backtested on the last 3 origins because refitting the posterior at every origin is expensive. Its comparison row is therefore based on fewer origins than the baselines.
 
 ### Forecast bias and reliability
 
-- `exponential_smoothing`: mean signed error -0.049, interval coverage 0.742 (close to nominal); over forecasting for 6 periods, under forecasting for 4 periods.
-- `mean`: mean signed error -0.256, interval coverage 0.833 (close to nominal); over forecasting for 10 periods, under forecasting for 5 periods.
-- `naive`: mean signed error -0.050, interval coverage 0.742 (close to nominal); over forecasting for 6 periods, under forecasting for 4 periods.
+- `bayesian`: mean signed error -9.257, interval coverage 0.333 (too narrow (overconfident)); under forecasting for 4 periods.
+- `exponential_smoothing`: mean signed error -0.045, interval coverage 0.747 (close to nominal); over forecasting for 6 periods, under forecasting for 4 periods.
+- `mean`: mean signed error -0.263, interval coverage 0.874 (close to nominal); over forecasting for 10 periods, under forecasting for 5 periods.
+- `naive`: mean signed error -0.045, interval coverage 0.773 (close to nominal); over forecasting for 6 periods, under forecasting for 4 periods.
 
 ### Bayesian model
 
 - Likelihood: `hurdle_gamma` (complexity tier `rich`)
 - Sampler: 2 chains, 400 draws, 400 tune, target_accept 0.9
-- Max R-hat: 1.010, min bulk ESS: 839.300, divergences: 0
+- Max R-hat: 1.012, min bulk ESS: 819.955, divergences: 0
 - Converged: False
-  - Warning: Max R-hat 1.010 exceeds 1.01: chains have not mixed, so posterior summaries are unreliable.
+  - Warning: Max R-hat 1.012 exceeds 1.01: chains have not mixed, so posterior summaries are unreliable.
 - 135 of 211 periods are zero, so a hurdle model is used: a Bernoulli component for whether a period is non-zero and a Gamma component for its level. The target is never rounded and no epsilon is added to force a Gamma to accept a zero.
 
 | Parameter | Posterior mean | 5% | 95% |
 |---|---|---|---|
-| `zero_intercept` | -1.295 | -1.717 | -0.882 |
-| `zero_trend` | 1.385 | 0.811 | 1.980 |
-| `zero_seasonal_sin` | 0.098 | -0.192 | 0.381 |
-| `zero_seasonal_cos` | 0.073 | -0.239 | 0.369 |
-| `zero_event_effect[0]` | -0.003 | -1.808 | 1.772 |
-| `zero_event_effect[1]` | -0.003 | -1.627 | 1.715 |
-| `zero_event_effect[2]` | 0.003 | -1.682 | 1.552 |
-| `intercept` | -1.046 | -1.391 | -0.646 |
-| `trend` | 1.102 | 0.600 | 1.572 |
-| `seasonal_sin` | 0.121 | -0.128 | 0.368 |
-| `seasonal_cos` | 0.687 | 0.513 | 0.860 |
-| `event_effect[0]` | -0.027 | -1.746 | 1.570 |
-| `event_effect[1]` | 0.034 | -1.554 | 1.600 |
-| `event_effect[2]` | 0.003 | -1.558 | 1.555 |
-| `gamma_shape` | 1.279 | 1.002 | 1.592 |
+| `zero_intercept` | -1.288 | -1.695 | -0.915 |
+| `zero_trend` | 1.372 | 0.790 | 1.961 |
+| `zero_seasonal_sin` | 0.096 | -0.194 | 0.382 |
+| `zero_seasonal_cos` | 0.068 | -0.231 | 0.383 |
+| `zero_event_effect[0]` | -0.014 | -1.614 | 1.538 |
+| `zero_event_effect[1]` | -0.034 | -1.613 | 1.677 |
+| `zero_event_effect[2]` | 0.002 | -1.564 | 1.585 |
+| `intercept` | -1.048 | -1.412 | -0.642 |
+| `trend` | 1.100 | 0.597 | 1.562 |
+| `seasonal_sin` | 0.133 | -0.123 | 0.392 |
+| `seasonal_cos` | 0.685 | 0.501 | 0.868 |
+| `event_effect[0]` | -0.059 | -1.834 | 1.686 |
+| `event_effect[1]` | -0.042 | -1.792 | 1.679 |
+| `event_effect[2]` | -0.042 | -1.683 | 1.458 |
+| `gamma_shape` | 1.275 | 0.986 | 1.592 |
 
 Event terms describe an association between an event window and the observed proxy. They are not causal estimates.
 
@@ -86,10 +101,10 @@ Event terms describe an association between an event window and the observed pro
 
 | Period | Forecast | Lower | Upper |
 |---|---|---|---|
-| 2026-04-27 | 2.245 | 0 | 6.736 |
-| 2026-05-04 | 2.132 | 0 | 6.373 |
-| 2026-05-11 | 2.199 | 0 | 6.740 |
-| 2026-05-18 | 1.977 | 0 | 5.709 |
+| 2026-04-27 | 2.067 | 0 | 6.333 |
+| 2026-05-04 | 2.166 | 0 | 6.402 |
+| 2026-05-11 | 2.334 | 0 | 6.690 |
+| 2026-05-18 | 2.141 | 0 | 6.288 |
 
 ## Target: `total_comments`
 
@@ -100,21 +115,36 @@ Event terms describe an association between an event window and the observed pro
 
 ### Model comparison
 
-| Model | WAPE | MAE | RMSE | Signed bias | Coverage | Interval width | Persistent bias |
-|---|---|---|---|---|---|---|---|
-| exponential_smoothing | 0.989 | 1.279 | 4.509 | -0.098 | 0.768 | 1.752 | yes |
-| naive | 1.023 | 1.323 | 4.623 | -0.091 | 0.864 | 1.713 | yes |
-| mean | 1.028 | 1.330 | 4.951 | -0.542 | 0.864 | 1.634 | yes |
+| Model | WAPE | MAE | RMSE | Signed bias | Coverage | Interval width | Persistent bias | Origins |
+|---|---|---|---|---|---|---|---|---|
+| bayesian | 0.944 | 19.982 | 28.590 | -19.421 | 0.333 | 5.167 | yes | 3 |
+| exponential_smoothing | 0.989 | 1.279 | 4.509 | -0.098 | 0.768 | 1.752 | yes | 99 |
+| naive | 1.023 | 1.323 | 4.623 | -0.091 | 0.864 | 1.713 | yes | 99 |
+| mean | 1.028 | 1.330 | 4.951 | -0.542 | 0.909 | 1.853 | yes | 99 |
 
-**Selected model: `exponential_smoothing`**
+#### Matched-origin comparison (includes the Bayesian model)
 
-- Lowest WAPE: exponential_smoothing (0.989).
+Refitting the posterior at every origin is expensive, so the Bayesian model is scored on the most recent origins. This table re-scores every model on exactly those origins, so no two models are compared across different evaluation windows.
+
+| Model | WAPE | MAE | RMSE | Signed bias | Coverage | Interval width | Persistent bias | Origins |
+|---|---|---|---|---|---|---|---|---|
+| naive | 0.811 | 17.167 | 24.190 | -5.500 | 0.333 | 1.943 | yes | 3 |
+| exponential_smoothing | 0.814 | 17.234 | 24.234 | -5.169 | 0.333 | 2.243 | yes | 3 |
+| mean | 0.862 | 18.250 | 27.015 | -18.042 | 0.333 | 4.232 | yes | 3 |
+| bayesian | 0.944 | 19.982 | 28.590 | -19.421 | 0.333 | 5.167 | yes | 3 |
+
+**Selected model: `naive`**
+
+- Lowest WAPE: naive (0.811).
 - Every candidate shows persistent bias or poor interval calibration; the lowest-WAPE model is reported, but none of them is reliable on this history.
+- Selection used the origins on which every model, including the Bayesian one, was scored.
+- The Bayesian model was backtested on the last 3 origins because refitting the posterior at every origin is expensive. Its comparison row is therefore based on fewer origins than the baselines.
 
 ### Forecast bias and reliability
 
+- `bayesian`: mean signed error -19.421, interval coverage 0.333 (too narrow (overconfident)); under forecasting for 4 periods.
 - `exponential_smoothing`: mean signed error -0.098, interval coverage 0.768 (close to nominal); over forecasting for 6 periods, under forecasting for 4 periods.
-- `mean`: mean signed error -0.542, interval coverage 0.864 (close to nominal); over forecasting for 10 periods, under forecasting for 5 periods.
+- `mean`: mean signed error -0.542, interval coverage 0.909 (too wide (underconfident)); over forecasting for 10 periods, under forecasting for 5 periods.
 - `naive`: mean signed error -0.091, interval coverage 0.864 (close to nominal); over forecasting for 6 periods, under forecasting for 4 periods.
 
 ### Bayesian model

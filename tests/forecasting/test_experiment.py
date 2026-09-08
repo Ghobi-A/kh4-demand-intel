@@ -202,3 +202,55 @@ def test_a_target_with_too_little_history_is_reported_not_forced(tmp_path) -> No
     result = outcome["per_target"]["total_comments"]
     assert result["usable"] is False
     assert "rolling-origin backtest needs" in result["reason"]
+
+
+def test_bayesian_model_is_scored_on_matched_origins(tmp_path, monkeypatch) -> None:
+    """A model that is never backtested has not actually been compared."""
+    import numpy as np
+
+    import src.forecasting.experiment as experiment_module
+
+    path = _write_weekly(tmp_path, sample_only=True)
+
+    def _fake_backtest(values, target, tier, config, exog_builder, frame, splits):
+        rows = []
+        for split in splits[-config.bayesian_backtest_origins :]:
+            for step, position in enumerate(split.test_index):
+                rows.append(
+                    {
+                        "model": "bayesian",
+                        "origin": int(split.origin),
+                        "horizon_step": step + 1,
+                        "period_index": int(position),
+                        "actual": float(values[position]),
+                        "forecast": float(values[position]) + 1.0,
+                        "lower": float(values[position]) - 2.0,
+                        "upper": float(values[position]) + 3.0,
+                    }
+                )
+        return pd.DataFrame(rows), ["scored on recent origins"]
+
+    monkeypatch.setattr(experiment_module, "_backtest_bayesian", _fake_backtest)
+
+    outcome = run_experiment(
+        path,
+        report_dir=tmp_path / "reports",
+        config=ForecastConfig(
+            min_train=20, horizon=2, step=4, bayesian_backtest_origins=2
+        ),
+        demo=True,
+    )
+
+    result = outcome["per_target"]["total_comments"]
+    assert "bayesian" in set(result["comparison"]["model"])
+
+    matched = result["matched_comparison"]
+    assert not matched.empty
+    assert "bayesian" in set(matched["model"])
+    # Every model in the matched table is scored on the same number of origins.
+    assert matched["origins"].nunique() == 1
+    assert (tmp_path / "reports" / "model_comparison_matched_origins.csv").exists()
+
+    report = (tmp_path / "reports" / "forecast_report.md").read_text()
+    assert "Matched-origin comparison" in report
+    assert np.isfinite(matched["wape"]).all()

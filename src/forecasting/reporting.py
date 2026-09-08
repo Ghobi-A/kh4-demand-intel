@@ -49,6 +49,7 @@ def _comparison_table(comparison: pd.DataFrame) -> list[str]:
         ("interval_coverage", "Coverage"),
         ("mean_interval_width", "Interval width"),
         ("persistent_bias", "Persistent bias"),
+        ("origins", "Origins"),
     ]
     present = [(key, label) for key, label in columns if key in comparison.columns]
     lines = [
@@ -137,6 +138,21 @@ def write_forecast_report(
             "",
         ]
         lines += _comparison_table(outcome["comparison"])
+
+        matched = outcome.get("matched_comparison")
+        if matched is not None and not matched.empty:
+            lines += [
+                "",
+                "#### Matched-origin comparison (includes the Bayesian model)",
+                "",
+                "Refitting the posterior at every origin is expensive, so the "
+                "Bayesian model is scored on the most recent origins. This table "
+                "re-scores every model on exactly those origins, so no two models "
+                "are compared across different evaluation windows.",
+                "",
+            ]
+            lines += _comparison_table(matched)
+
         lines += [
             "",
             f"**Selected model: `{outcome['selected_model']}`**",

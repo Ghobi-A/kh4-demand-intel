@@ -1,7 +1,7 @@
 {
-  "run_id": "6604d9e3f4d4",
-  "timestamp": "2026-09-08T15:22:18.896062+00:00",
-  "git_commit": "a1a791f",
+  "run_id": "c8d4c90dcaa6",
+  "timestamp": "2026-09-08T16:03:39.326767+00:00",
+  "git_commit": "ab063db",
   "input_path": "data/demo/weekly_demand_signals_demo.csv",
   "input_hash": "470790bb1fc09117",
   "observed_period": {
@@ -30,6 +30,7 @@
       "interval_level": 0.8
     },
     "include_bayesian": true,
+    "bayesian_backtest_origins": 3,
     "bayesian_draws": 400,
     "bayesian_tune": 400,
     "bayesian_chains": 2,
@@ -146,10 +147,12 @@
         206,
         208
       ],
-      "selected_model": "exponential_smoothing",
+      "selected_model": "naive",
       "selection_reasoning": [
-        "Lowest WAPE: exponential_smoothing (0.999).",
-        "Every candidate shows persistent bias or poor interval calibration; the lowest-WAPE model is reported, but none of them is reliable on this history."
+        "Lowest WAPE: naive (0.816).",
+        "Every candidate shows persistent bias or poor interval calibration; the lowest-WAPE model is reported, but none of them is reliable on this history.",
+        "Selection used the origins on which every model, including the Bayesian one, was scored.",
+        "The Bayesian model was backtested on the last 3 origins because refitting the posterior at every origin is expensive. Its comparison row is therefore based on fewer origins than the baselines."
       ],
       "likelihood": "hurdle_gamma",
       "likelihood_notes": [
@@ -164,13 +167,13 @@
         "progressbar": false
       },
       "bayesian_diagnostics": {
-        "max_r_hat": 1.010256,
-        "min_ess_bulk": 839.300377,
-        "min_ess_tail": 353.378323,
+        "max_r_hat": 1.011671,
+        "min_ess_bulk": 819.955024,
+        "min_ess_tail": 424.340166,
         "divergences": 0,
         "converged": false,
         "warnings": [
-          "Max R-hat 1.010 exceeds 1.01: chains have not mixed, so posterior summaries are unreliable."
+          "Max R-hat 1.012 exceeds 1.01: chains have not mixed, so posterior summaries are unreliable."
         ]
       }
     },
@@ -283,10 +286,12 @@
         206,
         208
       ],
-      "selected_model": "exponential_smoothing",
+      "selected_model": "naive",
       "selection_reasoning": [
-        "Lowest WAPE: exponential_smoothing (0.989).",
-        "Every candidate shows persistent bias or poor interval calibration; the lowest-WAPE model is reported, but none of them is reliable on this history."
+        "Lowest WAPE: naive (0.811).",
+        "Every candidate shows persistent bias or poor interval calibration; the lowest-WAPE model is reported, but none of them is reliable on this history.",
+        "Selection used the origins on which every model, including the Bayesian one, was scored.",
+        "The Bayesian model was backtested on the last 3 origins because refitting the posterior at every origin is expensive. Its comparison row is therefore based on fewer origins than the baselines."
       ],
       "likelihood": "negative_binomial",
       "likelihood_notes": [
@@ -325,8 +330,11 @@
     "probability_generation": "persisted_artifact",
     "oof_folds": 5,
     "oof_rows": 200,
+    "oof_matched_rows": 160,
+    "oof_match_note": "Rows matched to the labelled corpus (by id, or by normalised text when identifiers were stripped) use out-of-fold probabilities; the rest use the persisted model.",
     "probability_source_counts": {
-      "persisted_supervised": 304
+      "oof_supervised": 160,
+      "persisted_supervised": 144
     }
   }
 }

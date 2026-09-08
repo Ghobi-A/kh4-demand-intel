@@ -24,8 +24,11 @@
     "probability_generation": "persisted_artifact",
     "oof_folds": 5,
     "oof_rows": 200,
+    "oof_matched_rows": 160,
+    "oof_match_note": "Rows matched to the labelled corpus (by id, or by normalised text when identifiers were stripped) use out-of-fold probabilities; the rest use the persisted model.",
     "probability_source_counts": {
-      "persisted_supervised": 304
+      "oof_supervised": 160,
+      "persisted_supervised": 144
     }
   },
   "aggregation": {

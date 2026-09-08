@@ -91,6 +91,41 @@ def test_labelled_rows_take_out_of_fold_values_not_in_sample_ones() -> None:
     assert scored.loc[1, PROBABILITY_COLUMN] == pytest.approx(0.42)
 
 
+def test_rows_are_matched_by_text_when_identifiers_were_stripped() -> None:
+    """The portfolio extract strips ids; without a text fallback those audit
+    rows would be scored in-sample by a model that trained on them."""
+    signals = pd.DataFrame({"text": ["  Buying   IT day one ", "unrelated comment"]})
+    text_map = {"buying it day one": 0.88}
+
+    scored = attach_actionable_probabilities(
+        signals, _StubModel(0.42), {}, text_oof_map=text_map
+    )
+
+    assert scored.loc[0, PROVENANCE_COLUMN] == SOURCE_OOF
+    assert scored.loc[0, PROBABILITY_COLUMN] == pytest.approx(0.88)
+    assert scored.loc[1, PROVENANCE_COLUMN] == SOURCE_PERSISTED
+
+
+def test_id_match_takes_priority_over_text_match() -> None:
+    signals = pd.DataFrame({"id": ["r1"], "text": ["buying it"]})
+
+    scored = attach_actionable_probabilities(
+        signals, _StubModel(0.42), {"r1": 0.9}, text_oof_map={"buying it": 0.1}
+    )
+
+    assert scored.loc[0, PROBABILITY_COLUMN] == pytest.approx(0.9)
+
+
+def test_out_of_fold_keys_can_be_generated_by_text() -> None:
+    frame = make_fixture_frame()
+
+    by_text = oof_actionable_probabilities(frame, n_folds=4, seed=42, by_text=True)
+
+    assert by_text
+    expected = {" ".join(str(t).split()).casefold() for t in frame["text"]}
+    assert set(by_text).issubset(expected)
+
+
 def test_rows_without_text_are_unavailable_rather_than_guessed() -> None:
     signals = pd.DataFrame({"id": ["r1"], "text": ["   "]})
 

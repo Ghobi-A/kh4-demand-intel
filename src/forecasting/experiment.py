@@ -61,6 +61,10 @@ class ForecastConfig:
     max_origins: int | None = None
     bias: BiasThresholds = field(default_factory=BiasThresholds)
     include_bayesian: bool = True
+    #: Origins the Bayesian model is backtested over. Refitting the posterior at
+    #: every origin is expensive, so it is scored on the most recent origins and
+    #: compared against the baselines on exactly those origins.
+    bayesian_backtest_origins: int = 3
     bayesian_draws: int = 1000
     bayesian_tune: int = 1000
     bayesian_chains: int = 2
@@ -197,6 +201,93 @@ def _run_bayesian(
     }
 
 
+def _backtest_bayesian(
+    values: np.ndarray,
+    target: str,
+    tier: str,
+    config: ForecastConfig,
+    exog_builder: ExogBuilder | None,
+    frame: pd.DataFrame,
+    splits: list,
+) -> tuple[pd.DataFrame, list]:
+    """Score the Bayesian model on the most recent origins.
+
+    Refitting a posterior at every origin is too slow to be useful here, so the
+    model is scored on the last few origins and the comparison table reports it
+    alongside baselines evaluated on exactly those same origins. Scoring it on
+    fewer origins is stated rather than hidden; not scoring it at all would mean
+    it was never actually compared.
+    """
+    from src.forecasting.bayesian import (
+        BayesianUnavailableError,
+        SamplerConfig,
+        fit_bayesian_forecast,
+    )
+
+    notes: list[str] = []
+    chosen = splits[-config.bayesian_backtest_origins :] if config.bayesian_backtest_origins else []
+    if not chosen:
+        return pd.DataFrame(), ["Bayesian backtesting disabled."]
+
+    kind = target_kind(target)
+    sampler = SamplerConfig(
+        draws=config.bayesian_draws,
+        tune=config.bayesian_tune,
+        chains=config.bayesian_chains,
+        target_accept=config.bayesian_target_accept,
+        seed=config.seed,
+    )
+    rows: list[dict] = []
+    for split in chosen:
+        train_values = values[split.train_index]
+        horizon = len(split.test_index)
+        exog = exog_future = None
+        if exog_builder is not None:
+            exog, exog_future = exog_builder(int(split.origin), horizon)
+        exposure = exposure_future = None
+        if kind == "rate":
+            exposure = frame["total_comments"].to_numpy(dtype=float)[split.train_index]
+            exposure_future = frame["total_comments"].to_numpy(dtype=float)[split.test_index]
+        try:
+            result = fit_bayesian_forecast(
+                train_values,
+                horizon=horizon,
+                target=target,
+                target_kind=kind,
+                tier=tier,
+                exog=exog,
+                exog_future=exog_future,
+                exposure=exposure,
+                exposure_future=exposure_future,
+                config=sampler,
+                interval_level=config.interval_level,
+            )
+        except (BayesianUnavailableError, ValueError) as exc:
+            LOGGER.warning("Bayesian backtest failed at origin %s: %s", split.origin, exc)
+            notes.append(f"Origin {split.origin}: {exc}")
+            continue
+        for step, position in enumerate(split.test_index):
+            rows.append(
+                {
+                    "model": "bayesian",
+                    "origin": int(split.origin),
+                    "horizon_step": step + 1,
+                    "period_index": int(position),
+                    "actual": float(values[position]),
+                    "forecast": float(result.mean[step]),
+                    "lower": float(result.lower[step]),
+                    "upper": float(result.upper[step]),
+                }
+            )
+    if rows:
+        notes.append(
+            f"The Bayesian model was backtested on the last {len(chosen)} origins "
+            "because refitting the posterior at every origin is expensive. Its "
+            "comparison row is therefore based on fewer origins than the baselines."
+        )
+    return pd.DataFrame(rows), notes
+
+
 def run_target(
     dataset: WeeklyDataset,
     target: str,
@@ -259,24 +350,64 @@ def run_target(
         return {"target": target, "usable": False, "reason": "No model produced a forecast."}
 
     backtest_results = pd.concat(results, ignore_index=True)
+
+    bayesian_backtest = pd.DataFrame()
+    bayesian_notes: list[str] = []
+    if config.include_bayesian:
+        bayesian_backtest, bayesian_notes = _backtest_bayesian(
+            values, target, tier, config, period_builder, frame, splits
+        )
+        if not bayesian_backtest.empty:
+            backtest_results = pd.concat(
+                [backtest_results, bayesian_backtest], ignore_index=True
+            )
+
     monitoring = monitoring_table(backtest_results, config.bias)
     bias_flags = flag_persistent_bias(monitoring, config.bias)
 
-    rows = []
-    for name, group in backtest_results.groupby("model"):
+    def _metrics_for(group: pd.DataFrame, name: str, origins: int) -> dict:
         metrics = forecast_metrics(
             group["actual"], group["forecast"], group["lower"], group["upper"],
             insample=values,
         )
         metrics["model"] = name
-        metrics["complexity"] = BASELINE_REGISTRY[name]().complexity
+        metrics["complexity"] = (
+            BASELINE_REGISTRY[name]().complexity if name in BASELINE_REGISTRY else 5
+        )
         flags = bias_flags["models"].get(str(name), {})
         metrics["persistent_bias"] = bool(flags.get("persistent_bias", False))
         metrics["interval_calibration"] = flags.get("interval_calibration", "unknown")
-        rows.append(metrics)
+        metrics["origins"] = origins
+        return metrics
+
+    rows = [
+        _metrics_for(group, str(name), int(group["origin"].nunique()))
+        for name, group in backtest_results.groupby("model")
+    ]
     comparison = pd.DataFrame(rows)
 
-    selected, reasoning = select_best_model(comparison, bias_flags)
+    # Like-for-like: baselines re-scored on exactly the origins the Bayesian
+    # model was scored on, so the two are never compared across different
+    # evaluation windows.
+    matched_comparison = pd.DataFrame()
+    if not bayesian_backtest.empty:
+        origins = set(bayesian_backtest["origin"])
+        subset = backtest_results[backtest_results["origin"].isin(origins)]
+        matched_comparison = pd.DataFrame(
+            [
+                _metrics_for(group, str(name), len(origins))
+                for name, group in subset.groupby("model")
+            ]
+        )
+
+    selection_source = matched_comparison if not matched_comparison.empty else comparison
+    selected, reasoning = select_best_model(selection_source, bias_flags)
+    if not matched_comparison.empty:
+        reasoning.append(
+            "Selection used the origins on which every model, including the "
+            "Bayesian one, was scored."
+        )
+    reasoning.extend(bayesian_notes)
 
     bayesian = {"available": False, "reason": "Bayesian modelling disabled for this run."}
     if config.include_bayesian:
@@ -309,6 +440,7 @@ def run_target(
         "backtest": backtest_results,
         "monitoring": monitoring,
         "comparison": comparison,
+        "matched_comparison": matched_comparison,
         "bias_flags": bias_flags,
         "selected_model": selected,
         "selection_reasoning": reasoning,
@@ -349,6 +481,7 @@ def run_experiment(
 
     per_target: dict[str, dict] = {}
     all_backtests, all_monitoring, all_comparisons, all_forecasts = [], [], [], []
+    all_matched: list[pd.DataFrame] = []
 
     for target in targets:
         LOGGER.info("Running target %s", target)
@@ -362,6 +495,7 @@ def run_experiment(
             (outcome["monitoring"], all_monitoring),
             (outcome["comparison"], all_comparisons),
             (outcome["forecast"], all_forecasts),
+            (outcome.get("matched_comparison"), all_matched),
         ]:
             if frame is not None and not frame.empty:
                 tagged = frame.copy()
@@ -381,6 +515,7 @@ def run_experiment(
     _write(all_monitoring, "monitoring.csv")
     _write(all_comparisons, "model_comparison.csv")
     _write(all_forecasts, "forecast.csv")
+    _write(all_matched, "model_comparison_matched_origins.csv")
 
     observed_frames = [
         pd.DataFrame(

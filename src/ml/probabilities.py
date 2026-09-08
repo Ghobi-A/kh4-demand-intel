@@ -152,6 +152,7 @@ def oof_actionable_probabilities(
     model_name: str = "logistic",
     seed: int = 42,
     n_folds: int = 5,
+    by_text: bool = False,
 ) -> dict[str, float]:
     """Out-of-fold calibrated P(actionable) keyed by ``record_id``.
 
@@ -192,8 +193,13 @@ def oof_actionable_probabilities(
         if raw is None:
             continue
         calibrated = calibrator.predict_proba(raw) if calibrator is not None else raw
-        for record_id, value in zip(held_out["record_id"].astype(str), calibrated):
-            probabilities[record_id] = float(value)
+        keys = (
+            held_out["text"].map(normalise_text_key)
+            if by_text
+            else held_out["record_id"].astype(str)
+        )
+        for key, value in zip(keys, calibrated):
+            probabilities[str(key)] = float(value)
 
     return probabilities
 
@@ -219,20 +225,28 @@ def _persisted_probabilities(model: HierarchicalClassifier, texts: list[str]) ->
     return np.asarray(scores, dtype=float)
 
 
+def normalise_text_key(text) -> str:
+    """Deterministic key for matching a signal row to a labelled row by content."""
+    return " ".join(str(text).split()).strip().casefold()
+
+
 def attach_actionable_probabilities(
     signals: pd.DataFrame,
     model: HierarchicalClassifier,
     oof_map: dict[str, float] | None = None,
     id_column: str = "id",
+    text_oof_map: dict[str, float] | None = None,
 ) -> pd.DataFrame:
     """Add ``actionable_probability`` and ``probability_source`` to signal rows.
 
-    Rows matching the labelled corpus take their out-of-fold value. If OOF is
-    unavailable for such a row, it is marked ``excluded_training_row`` and left
-    out of the demand proxy rather than being scored in-sample.
+    Rows matching the labelled corpus take their out-of-fold value. Matching is
+    by record id where available and by normalised text otherwise: the portfolio
+    extract strips identifiers for privacy, and without a content fallback those
+    rows would silently be scored in-sample by a model that trained on them.
     """
     result = signals.copy().reset_index(drop=True)
     oof_map = oof_map or {}
+    text_oof_map = text_oof_map or {}
 
     texts = result["text"].astype(str) if "text" in result.columns else pd.Series([""] * len(result))
     has_text = texts.str.strip() != ""
@@ -242,14 +256,25 @@ def attach_actionable_probabilities(
         if id_column in result.columns
         else pd.Series([""] * len(result))
     )
-    in_corpus = ids.isin(set(oof_map)) if oof_map else pd.Series(False, index=result.index)
+    by_id = ids.isin(set(oof_map)) if oof_map else pd.Series(False, index=result.index)
+
+    text_keys = texts.map(normalise_text_key)
+    by_text = (
+        text_keys.isin(set(text_oof_map)) & ~by_id
+        if text_oof_map
+        else pd.Series(False, index=result.index)
+    )
+    in_corpus = by_id | by_text
 
     probabilities = pd.Series(np.nan, index=result.index, dtype=float)
     provenance = pd.Series(SOURCE_UNAVAILABLE, index=result.index, dtype=object)
 
-    if in_corpus.any():
-        probabilities[in_corpus] = ids[in_corpus].map(oof_map).astype(float)
-        provenance[in_corpus] = SOURCE_OOF
+    if by_id.any():
+        probabilities[by_id] = ids[by_id].map(oof_map).astype(float)
+        provenance[by_id] = SOURCE_OOF
+    if by_text.any():
+        probabilities[by_text] = text_keys[by_text].map(text_oof_map).astype(float)
+        provenance[by_text] = SOURCE_OOF
 
     to_score = has_text & ~in_corpus
     if to_score.any():
@@ -284,14 +309,25 @@ def build_probabilities(
         )
 
     oof_map: dict[str, float] = {}
+    text_oof_map: dict[str, float] = {}
     if use_oof:
         labelled = load_labelled_data(labelled_path) if labelled_path else load_labelled_data()
         oof_map = oof_actionable_probabilities(
             labelled, model_name=model_name, seed=seed, n_folds=n_folds
         )
+        text_oof_map = oof_actionable_probabilities(
+            labelled, model_name=model_name, seed=seed, n_folds=n_folds, by_text=True
+        )
 
-    scored = attach_actionable_probabilities(signals, model, oof_map)
+    scored = attach_actionable_probabilities(signals, model, oof_map, text_oof_map=text_oof_map)
     counts = scored[PROVENANCE_COLUMN].value_counts().to_dict()
+    matched = int(counts.get(SOURCE_OOF, 0))
+    if oof_map and not matched:
+        LOGGER.warning(
+            "No signal row matched the labelled corpus by id or text, so every "
+            "probability came from the persisted model. If this dataset contains "
+            "audit rows, some probabilities may be in-sample."
+        )
     metadata = {
         "model_run": {
             "model_name": model_metadata.get("model_name"),
@@ -307,6 +343,12 @@ def build_probabilities(
         "probability_generation": model_metadata.get("probability_generation"),
         "oof_folds": n_folds if use_oof else 0,
         "oof_rows": len(oof_map),
+        "oof_matched_rows": matched,
+        "oof_match_note": (
+            "Rows matched to the labelled corpus (by id, or by normalised text "
+            "when identifiers were stripped) use out-of-fold probabilities; the "
+            "rest use the persisted model."
+        ),
         "probability_source_counts": {str(k): int(v) for k, v in counts.items()},
     }
     return scored, metadata

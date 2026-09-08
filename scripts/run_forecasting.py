@@ -41,6 +41,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tune", type=int, default=1000)
     parser.add_argument("--chains", type=int, default=2)
     parser.add_argument("--max-origins", type=int, default=None)
+    parser.add_argument(
+        "--bayesian-origins",
+        type=int,
+        default=3,
+        help="Origins to backtest the Bayesian model on (it is refitted at each)",
+    )
     parser.add_argument("--no-bayesian", action="store_true")
     parser.add_argument(
         "--save-posterior",
@@ -69,6 +75,7 @@ def main() -> None:
         seed=args.seed,
         max_origins=args.max_origins,
         include_bayesian=not args.no_bayesian,
+        bayesian_backtest_origins=args.bayesian_origins,
         bayesian_draws=args.draws,
         bayesian_tune=args.tune,
         bayesian_chains=args.chains,
