@@ -1,0 +1,160 @@
+{
+  "actionable_probability_mass": {
+    "thresholds": {
+      "consecutive_periods": 4,
+      "tolerance_fraction": 0.1,
+      "rolling_window": 4,
+      "interval_level": 0.8
+    },
+    "models": {
+      "exponential_smoothing": {
+        "n_forecasts": 198,
+        "mean_signed_error": -0.04890956111853335,
+        "materiality_threshold": 0.061393733678092366,
+        "persistent_bias": true,
+        "bias_runs": [
+          {
+            "direction": "over_forecasting",
+            "length": 6,
+            "ends_at_origin": 118,
+            "mean_signed_error": 1.1273724394959308
+          },
+          {
+            "direction": "under_forecasting",
+            "length": 4,
+            "ends_at_origin": 176,
+            "mean_signed_error": -0.5465318187448281
+          }
+        ],
+        "interval_coverage": 0.7424242424242424,
+        "coverage_gap_vs_nominal": -0.05757575757575761,
+        "interval_calibration": "close to nominal"
+      },
+      "mean": {
+        "n_forecasts": 198,
+        "mean_signed_error": -0.2562819849767182,
+        "materiality_threshold": 0.061393733678092366,
+        "persistent_bias": true,
+        "bias_runs": [
+          {
+            "direction": "over_forecasting",
+            "length": 10,
+            "ends_at_origin": 124,
+            "mean_signed_error": 0.9257276827452378
+          },
+          {
+            "direction": "under_forecasting",
+            "length": 5,
+            "ends_at_origin": 178,
+            "mean_signed_error": -0.5671004587108559
+          }
+        ],
+        "interval_coverage": 0.8333333333333334,
+        "coverage_gap_vs_nominal": 0.033333333333333326,
+        "interval_calibration": "close to nominal"
+      },
+      "naive": {
+        "n_forecasts": 198,
+        "mean_signed_error": -0.05029394813069637,
+        "materiality_threshold": 0.061393733678092366,
+        "persistent_bias": true,
+        "bias_runs": [
+          {
+            "direction": "over_forecasting",
+            "length": 6,
+            "ends_at_origin": 118,
+            "mean_signed_error": 1.0828148506351571
+          },
+          {
+            "direction": "under_forecasting",
+            "length": 4,
+            "ends_at_origin": 176,
+            "mean_signed_error": -0.5487306004754582
+          }
+        ],
+        "interval_coverage": 0.7424242424242424,
+        "coverage_gap_vs_nominal": -0.05757575757575761,
+        "interval_calibration": "close to nominal"
+      }
+    }
+  },
+  "total_comments": {
+    "thresholds": {
+      "consecutive_periods": 4,
+      "tolerance_fraction": 0.1,
+      "rolling_window": 4,
+      "interval_level": 0.8
+    },
+    "models": {
+      "exponential_smoothing": {
+        "n_forecasts": 198,
+        "mean_signed_error": -0.09781641961250839,
+        "materiality_threshold": 0.12929292929292932,
+        "persistent_bias": true,
+        "bias_runs": [
+          {
+            "direction": "over_forecasting",
+            "length": 6,
+            "ends_at_origin": 118,
+            "mean_signed_error": 2.084836919578916
+          },
+          {
+            "direction": "under_forecasting",
+            "length": 4,
+            "ends_at_origin": 176,
+            "mean_signed_error": -1.0329985253311558
+          }
+        ],
+        "interval_coverage": 0.7676767676767676,
+        "coverage_gap_vs_nominal": -0.03232323232323242,
+        "interval_calibration": "close to nominal"
+      },
+      "mean": {
+        "n_forecasts": 198,
+        "mean_signed_error": -0.5416666666666666,
+        "materiality_threshold": 0.12929292929292932,
+        "persistent_bias": true,
+        "bias_runs": [
+          {
+            "direction": "over_forecasting",
+            "length": 10,
+            "ends_at_origin": 124,
+            "mean_signed_error": 1.825
+          },
+          {
+            "direction": "under_forecasting",
+            "length": 5,
+            "ends_at_origin": 178,
+            "mean_signed_error": -1.15
+          }
+        ],
+        "interval_coverage": 0.8636363636363636,
+        "coverage_gap_vs_nominal": 0.0636363636363636,
+        "interval_calibration": "close to nominal"
+      },
+      "naive": {
+        "n_forecasts": 198,
+        "mean_signed_error": -0.09090909090909091,
+        "materiality_threshold": 0.12929292929292932,
+        "persistent_bias": true,
+        "bias_runs": [
+          {
+            "direction": "over_forecasting",
+            "length": 6,
+            "ends_at_origin": 118,
+            "mean_signed_error": 2.0
+          },
+          {
+            "direction": "under_forecasting",
+            "length": 4,
+            "ends_at_origin": 176,
+            "mean_signed_error": -1.0
+          }
+        ],
+        "interval_coverage": 0.8636363636363636,
+        "coverage_gap_vs_nominal": 0.0636363636363636,
+        "interval_calibration": "close to nominal"
+      }
+    }
+  }
+}

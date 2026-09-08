@@ -43,3 +43,6 @@ line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "pymc_smoke: integration smoke test that samples a tiny PyMC model (CI runs these on one Python version only)",
+]
