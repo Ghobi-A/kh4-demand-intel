@@ -208,3 +208,38 @@ def test_full_dataset_run_is_not_marked_as_a_sample(tmp_path, monkeypatch) -> No
     assert meta["sample_only"] is False
     assert meta["volume_representative"] is True
     assert meta["evaluation_status"] == "full_dataset"
+
+
+def test_seed_capped_youtube_manifest_marks_volume_as_not_representative(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    signals = _signals()
+    input_path = tmp_path / "data" / "processed" / "signals.csv"
+    input_path.parent.mkdir(parents=True)
+    signals.to_csv(input_path, index=False)
+
+    manifest_path = tmp_path / "reports" / "tables" / "youtube_fetch_manifest.csv"
+    manifest_path.parent.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "video_id": ["vid1", "vid2"],
+            "status": ["ok", "ok"],
+            "rows_fetched": [100, 17],
+            "max_results": [100, 100],
+        }
+    ).to_csv(manifest_path, index=False)
+
+    monkeypatch.setattr(
+        "src.temporal.build_probabilities", lambda df, **kwargs: (df, {"oof_rows": 0})
+    )
+
+    _, meta = build_temporal_dataset(
+        input_path=input_path, output_path=tmp_path / "data" / "processed" / "weekly.csv"
+    )
+
+    assert meta["sample_only"] is False
+    assert meta["volume_representative"] is False
+    assert meta["evaluation_status"] == "seed_capped_dataset"
+    assert meta["youtube_collection"]["seed_capped"] is True
+    assert meta["youtube_collection"]["cap_hit_videos"] == 1

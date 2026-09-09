@@ -329,6 +329,7 @@ def fetch_youtube_comments_batch(
             "seed_channel": getattr(row, "channel", ""),
             "status": "",
             "rows_fetched": 0,
+            "max_results": int(max_results),
             "output_path": str(_build_output_path(video_id, resolved_dir)),
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "error": "",
