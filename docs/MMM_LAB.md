@@ -81,6 +81,26 @@ point and all coefficients estimated. Media coefficients are constrained
 non-negative, spend is scaled per channel so priors mean the same thing across
 budgets, and priors are weakly informative.
 
+## Sampler geometry
+
+An earlier revision produced divergent transitions. The cause was geometry, not
+sampler settings, and it was fixed structurally rather than by raising
+`target_accept`:
+
+- **Time and the target are centred.** With raw week numbers the intercept is the
+  value at week zero, which is strongly correlated with the trend. Centring makes
+  the two near-orthogonal and removes that ridge.
+- **The half-saturation point has a prior on the scale spend is measured in.**
+  Spend is scaled by each channel's own mean, so a LogNormal centred at 1 says
+  "this channel half-saturates near its typical spend". A diffuse prior let theta
+  drift to where it traded off against the coefficient along a ridge, which is the
+  classic marketing-mix pathology.
+- **Priors are expressed in units of the observed spread**, so none is
+  accidentally strong or vacuous.
+
+The committed run now samples with zero divergences at the ordinary
+`target_accept` of 0.9.
+
 ## Recovery against known truth
 
 `reports/mmm/recovery.csv` scores each check. On the committed run the model:
@@ -89,9 +109,19 @@ budgets, and priors are weakly informative.
 - keeps the **true contribution inside the 90% credible interval** for every channel;
 - shows **diminishing returns** in every response curve;
 - recovers **adstock decay** for most channels;
-- but **swaps the top two channels** by contribution.
+- but **swaps the top two channels** by contribution, and **under-attributes
+  total media contribution** (roughly 158,000 estimated against 236,000 true).
 
-That last failure is the honest headline. Channel contributions are only
+Those last two failures are the honest headline.
+
+The under-attribution is structural rather than a prior artefact. Weekly spend is
+fairly stable, so each channel's saturated response is close to constant, and a
+constant is not separable from the baseline: only the *variation* in media is
+identified from observational data like this, while its average level is absorbed
+by the intercept. Widening the baseline prior does not recover it, which is what
+distinguishes a genuine identifiability limit from a tuning choice. Separating the
+level needs spend variation this data does not contain, or an experiment such as a
+geo holdout. Channel contributions are only
 partially identified: channels whose spend moves together, or whose adstock and
 saturation shapes are similar, trade off against one another, and the model can
 fit the data well while assigning credit differently from the truth. The

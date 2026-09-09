@@ -236,6 +236,8 @@ def attach_actionable_probabilities(
     oof_map: dict[str, float] | None = None,
     id_column: str = "id",
     text_oof_map: dict[str, float] | None = None,
+    training_ids: set | None = None,
+    training_text_keys: set | None = None,
 ) -> pd.DataFrame:
     """Add ``actionable_probability`` and ``probability_source`` to signal rows.
 
@@ -243,6 +245,13 @@ def attach_actionable_probabilities(
     by record id where available and by normalised text otherwise: the portfolio
     extract strips identifiers for privacy, and without a content fallback those
     rows would silently be scored in-sample by a model that trained on them.
+
+    ``training_ids`` and ``training_text_keys`` name every row the model was
+    trained on, whether or not an out-of-fold value was produced for it. A
+    training row with no out-of-fold value is marked ``excluded_training_row``
+    and left without a probability: falling back to the persisted model there
+    would score it with a model that had already seen it, which is exactly the
+    silent leakage this provenance column exists to make visible.
     """
     result = signals.copy().reset_index(drop=True)
     oof_map = oof_map or {}
@@ -264,7 +273,15 @@ def attach_actionable_probabilities(
         if text_oof_map
         else pd.Series(False, index=result.index)
     )
-    in_corpus = by_id | by_text
+    has_oof = by_id | by_text
+
+    # Every row the model trained on, regardless of whether a fold produced an
+    # out-of-fold value for it.
+    training_ids = set(training_ids) if training_ids is not None else set(oof_map)
+    training_text_keys = (
+        set(training_text_keys) if training_text_keys is not None else set(text_oof_map)
+    )
+    is_training_row = ids.isin(training_ids) | text_keys.isin(training_text_keys)
 
     probabilities = pd.Series(np.nan, index=result.index, dtype=float)
     provenance = pd.Series(SOURCE_UNAVAILABLE, index=result.index, dtype=object)
@@ -276,7 +293,18 @@ def attach_actionable_probabilities(
         probabilities[by_text] = text_keys[by_text].map(text_oof_map).astype(float)
         provenance[by_text] = SOURCE_OOF
 
-    to_score = has_text & ~in_corpus
+    # A training row without an out-of-fold value is never scored in-sample.
+    excluded = is_training_row & ~has_oof
+    if excluded.any():
+        provenance[excluded] = SOURCE_EXCLUDED
+        LOGGER.warning(
+            "%s rows are in the labelled corpus but have no out-of-fold "
+            "probability; they are excluded from the demand proxy rather than "
+            "scored by a model that trained on them",
+            int(excluded.sum()),
+        )
+
+    to_score = has_text & ~has_oof & ~excluded
     if to_score.any():
         scored = _persisted_probabilities(model, texts[to_score].tolist())
         if scored is not None:
@@ -319,7 +347,20 @@ def build_probabilities(
             labelled, model_name=model_name, seed=seed, n_folds=n_folds, by_text=True
         )
 
-    scored = attach_actionable_probabilities(signals, model, oof_map, text_oof_map=text_oof_map)
+    training_ids: set = set()
+    training_text_keys: set = set()
+    if use_oof:
+        training_ids = set(labelled["record_id"].astype(str))
+        training_text_keys = set(labelled["text"].map(normalise_text_key))
+
+    scored = attach_actionable_probabilities(
+        signals,
+        model,
+        oof_map,
+        text_oof_map=text_oof_map,
+        training_ids=training_ids,
+        training_text_keys=training_text_keys,
+    )
     counts = scored[PROVENANCE_COLUMN].value_counts().to_dict()
     matched = int(counts.get(SOURCE_OOF, 0))
     if oof_map and not matched:
@@ -344,10 +385,14 @@ def build_probabilities(
         "oof_folds": n_folds if use_oof else 0,
         "oof_rows": len(oof_map),
         "oof_matched_rows": matched,
+        "excluded_training_rows": int(counts.get(SOURCE_EXCLUDED, 0)),
         "oof_match_note": (
             "Rows matched to the labelled corpus (by id, or by normalised text "
-            "when identifiers were stripped) use out-of-fold probabilities; the "
-            "rest use the persisted model."
+            "when identifiers were stripped) use out-of-fold probabilities. A "
+            "training row without an out-of-fold value is marked "
+            "'excluded_training_row' and contributes nothing to the demand "
+            "proxy; it is never scored by the persisted model, which trained on "
+            "it. Only rows outside the corpus use the persisted model."
         ),
         "probability_source_counts": {str(k): int(v) for k, v in counts.items()},
     }

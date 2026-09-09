@@ -171,3 +171,144 @@ def test_event_features_produce_a_reported_event_effect() -> None:
     assert any(name.startswith("event_effect") for name in result.effects)
     for values_summary in result.effects.values():
         assert values_summary["hdi_5"] <= values_summary["mean"] <= values_summary["hdi_95"]
+
+
+@pytest.mark.pymc_smoke
+def test_constant_event_features_are_dropped_rather_than_estimated_from_the_prior() -> None:
+    """A feature that never varies cannot inform its own coefficient.
+
+    In the demo data every event post-dates the observations, so the event
+    columns are all zero. Estimating a coefficient there means sampling the
+    prior and then applying it to the forecast as though it had been learned.
+    """
+    rng = np.random.default_rng(5)
+    values = rng.gamma(3.0, 2.0, 40)
+    constant_exog = np.zeros((40, 2))
+
+    result = fit_bayesian_forecast(
+        values, horizon=2, exog=constant_exog, exog_future=np.zeros((2, 2)), config=SMOKE
+    )
+
+    assert any("cannot identify" in note for note in result.notes)
+    assert not any(name.startswith("event_effect") for name in result.effects)
+
+
+@pytest.mark.pymc_smoke
+def test_a_varying_event_feature_is_still_estimated() -> None:
+    rng = np.random.default_rng(6)
+    exog = np.zeros((40, 1))
+    exog[20:30, 0] = 1.0
+    values = np.exp(1.0 + 0.8 * exog[:, 0]) + rng.gamma(1.0, 0.3, 40)
+
+    result = fit_bayesian_forecast(
+        values, horizon=2, exog=exog, exog_future=np.ones((2, 1)), config=SMOKE
+    )
+
+    assert any(name.startswith("event_effect") for name in result.effects)
+    assert not any("cannot identify" in note for note in result.notes)
+
+
+@pytest.mark.pymc_smoke
+def test_posterior_predictive_reproduces_the_share_of_empty_periods() -> None:
+    """The hurdle component must be able to generate zeros, and be checked on it."""
+    rng = np.random.default_rng(7)
+    values = np.where(rng.random(60) < 0.5, 0.0, rng.gamma(3.0, 2.0, 60))
+
+    result = fit_bayesian_forecast(
+        values, horizon=2, config=SamplerConfig(draws=300, tune=300, chains=2, seed=42)
+    )
+    ppc = result.posterior_predictive
+
+    assert ppc["observed_zero_share"] > 0.3
+    # Replicates, not means: a mean-only summary can never produce a zero.
+    assert ppc["predicted_zero_share"] > 0.1
+    assert ppc["predicted_zero_share"] == pytest.approx(ppc["observed_zero_share"], abs=0.2)
+    assert ppc["nominal_interval_level"] == pytest.approx(0.8)
+
+
+@pytest.mark.pymc_smoke
+def test_posterior_predictive_spread_is_comparable_with_the_data() -> None:
+    rng = np.random.default_rng(8)
+    values = rng.gamma(4.0, 2.0, 60)
+
+    result = fit_bayesian_forecast(
+        values, horizon=2, config=SamplerConfig(draws=300, tune=300, chains=2, seed=42)
+    )
+    ppc = result.posterior_predictive
+
+    # A mean-only summary would give a predicted spread far below observed.
+    assert ppc["predicted_std"] > ppc["observed_std"] / 3
+
+
+@pytest.mark.pymc_smoke
+def test_centred_time_keeps_intercept_and_trend_from_fighting() -> None:
+    """Centring time is what removed the intercept/trend ridge."""
+    rng = np.random.default_rng(9)
+    values = np.exp(0.5 + np.linspace(0, 1, 60)) + rng.gamma(1.0, 0.3, 60)
+
+    result = fit_bayesian_forecast(
+        values, horizon=2, config=SamplerConfig(draws=400, tune=400, chains=2, seed=42)
+    )
+
+    assert result.diagnostics["divergences"] == 0
+    assert result.diagnostics["max_r_hat"] < 1.05
+
+
+def test_count_targets_use_negative_binomial_not_poisson() -> None:
+    """Poisson fixes variance to the mean; these series are overdispersed.
+
+    Negative Binomial nests the Poisson case, so choosing it is the
+    conservative option rather than an assumption about dispersion.
+    """
+    overdispersed = np.array([0.0, 0.0, 50.0, 1.0, 0.0, 80.0] * 5)
+    near_poisson = np.array([3.0, 4.0, 2.0, 3.0, 4.0, 3.0] * 5)
+
+    assert choose_likelihood(KIND_COUNT, overdispersed) == "negative_binomial"
+    assert choose_likelihood(KIND_COUNT, near_poisson) == "negative_binomial"
+
+
+def test_a_rate_is_never_modelled_as_a_bare_continuous_quantity() -> None:
+    """A percentage carries a sample size; a continuous fit discards it."""
+    rates = np.array([0.1, 0.5, 0.9] * 8)
+
+    assert choose_likelihood(KIND_RATE, rates) == "binomial"
+
+
+@pytest.mark.pymc_smoke
+def test_rate_model_ignores_zero_denominator_periods_entirely() -> None:
+    """A period with no trials is an undefined rate, not an observed 0%."""
+    rng = np.random.default_rng(11)
+    trials = rng.integers(10, 40, 40).astype(float)
+    successes = rng.binomial(trials.astype(int), 0.7).astype(float)
+
+    with_empty_trials = np.concatenate([trials, np.zeros(10)])
+    with_empty_successes = np.concatenate([successes, np.zeros(10)])
+
+    baseline = fit_bayesian_forecast(
+        successes, horizon=2, target_kind=KIND_RATE, exposure=trials,
+        exposure_future=np.array([20.0, 20.0]), config=SMOKE,
+    )
+    padded = fit_bayesian_forecast(
+        with_empty_successes, horizon=2, target_kind=KIND_RATE, exposure=with_empty_trials,
+        exposure_future=np.array([20.0, 20.0]), config=SMOKE,
+    )
+
+    # Ten empty periods must not drag the estimated rate toward zero.
+    assert padded.mean.mean() == pytest.approx(baseline.mean.mean(), rel=0.3)
+    assert any("zero denominator" in note for note in padded.notes)
+
+
+@pytest.mark.pymc_smoke
+def test_an_all_zero_denominator_rate_series_is_refused() -> None:
+    with pytest.raises(ValueError):
+        fit_bayesian_forecast(
+            np.zeros(20), horizon=2, target_kind=KIND_RATE,
+            exposure=np.zeros(20), config=SMOKE,
+        )
+
+
+def test_a_count_target_must_be_integer_valued() -> None:
+    with pytest.raises(ValueError, match="not integer-valued"):
+        fit_bayesian_forecast(
+            np.full(20, 2.5), horizon=2, target_kind=KIND_COUNT, config=SMOKE
+        )

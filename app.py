@@ -619,16 +619,35 @@ def render_forecast_monitoring_tab() -> None:
 
     flags = artefacts.bias_flags.get(target, {}).get("models", {}).get(model, {})
     if flags:
-        columns = st.columns(3)
+        persistent = flags.get("persistent_bias")
+        sufficient = flags.get("sufficient_evidence", True)
+        columns = st.columns(4)
         columns[0].metric("Mean signed error", f"{flags.get('mean_signed_error', float('nan')):.3f}")
         coverage = flags.get("interval_coverage")
         columns[1].metric(
             "Interval coverage", "—" if coverage is None else f"{coverage:.0%}"
         )
-        columns[2].metric("Persistent bias", "yes" if flags.get("persistent_bias") else "no")
+        # "Unknown" is a third state, not a quiet "no": too few forecasts to judge.
+        columns[2].metric(
+            "Persistent bias",
+            "unknown" if persistent is None else ("yes" if persistent else "no"),
+        )
+        columns[3].metric("Forecasts", flags.get("n_forecasts", "—"))
         st.caption(f"Interval calibration: {flags.get('interval_calibration')}")
 
-        if flags.get("persistent_bias"):
+        if not sufficient:
+            st.warning(
+                f"Only {flags.get('n_forecasts')} forecasts for this model — too few "
+                "to call bias or interval calibration either way. A run of four "
+                "same-signed errors in six happens about one time in five by "
+                "chance, so the figures above are observations, not verdicts."
+            )
+            for run in flags.get("observed_bias_runs", []):
+                st.caption(
+                    f"Observed (not concluded): {run['direction'].replace('_', ' ')} "
+                    f"over {run['length']} consecutive periods."
+                )
+        elif persistent:
             for run in flags.get("bias_runs", []):
                 st.error(
                     f"Persistent {run['direction'].replace('_', ' ')} over "

@@ -100,6 +100,47 @@ class BayesianForecastResult:
         )
 
 
+def _dispersion_notes(ppc: dict) -> list:
+    """Flag posterior predictive checks that the model visibly fails.
+
+    A check is only useful if a failure is reported. Two failures matter here:
+    replicates that are much less variable than the data (real spikes the model
+    cannot produce), and a zero share the model does not reproduce.
+    """
+    notes: list[str] = []
+    if not ppc:
+        return notes
+    observed_std = ppc.get("observed_std")
+    predicted_std = ppc.get("predicted_std")
+    if observed_std and predicted_std and observed_std > 0:
+        ratio = predicted_std / observed_std
+        if ratio < 0.7:
+            notes.append(
+                f"Posterior predictive check: replicates are less variable than the "
+                f"data (predicted sd {predicted_std:.2f} against observed "
+                f"{observed_std:.2f}). The model under-states how large the busiest "
+                "periods get, so its intervals should not be read as capturing "
+                "spike risk."
+            )
+        elif ratio > 1.5:
+            notes.append(
+                f"Posterior predictive check: replicates are more variable than the "
+                f"data (predicted sd {predicted_std:.2f} against observed "
+                f"{observed_std:.2f}), so intervals are wider than the history "
+                "warrants."
+            )
+    observed_zero = ppc.get("observed_zero_share")
+    predicted_zero = ppc.get("predicted_zero_share")
+    if observed_zero is not None and predicted_zero is not None:
+        if abs(observed_zero - predicted_zero) > 0.1:
+            notes.append(
+                f"Posterior predictive check: the model reproduces a "
+                f"{predicted_zero:.0%} share of empty periods against "
+                f"{observed_zero:.0%} observed, so the zero component is misfit."
+            )
+    return notes
+
+
 def choose_likelihood(target_kind: str, values: np.ndarray) -> str:
     """Pick the likelihood family for a target, and say why in the name."""
     finite = np.asarray(values, dtype=float)
@@ -177,10 +218,14 @@ def fit_bayesian_forecast(
     notes: list[str] = []
     n = values.size
 
-    # Time is scaled so the trend prior means the same thing on any history length.
+    # Time is centred and scaled. Uncentred, the intercept is the value at the
+    # very first period, which is strongly correlated with the trend; that ridge
+    # slows mixing. Centred, the intercept is the average level and the two are
+    # close to orthogonal. Future periods use the same transform.
     scale = max(n - 1, 1)
-    time_index = np.arange(n) / scale
-    future_time = (np.arange(n, n + horizon)) / scale
+    time_centre = float(np.mean(np.arange(n)))
+    time_index = (np.arange(n) - time_centre) / scale
+    future_time = (np.arange(n, n + horizon) - time_centre) / scale
 
     if exog is not None:
         exog = np.asarray(exog, dtype=float)[:n]
@@ -188,6 +233,25 @@ def fit_bayesian_forecast(
         exog_future = np.asarray(exog_future, dtype=float)[:horizon]
         if exog is not None and exog_future.shape[1] != exog.shape[1]:
             raise ValueError("Future exogenous features must match the training feature count")
+
+    # A feature that never varies in the training window carries no information
+    # about its own coefficient: that coefficient would be sampled straight from
+    # its prior and then applied to the forecast as if it had been estimated.
+    # Drop those columns and say so rather than reporting an unidentified effect.
+    if exog is not None and exog.size:
+        identified = np.asarray(exog.std(axis=0) > 0)
+        if not identified.all():
+            dropped = int((~identified).sum())
+            notes.append(
+                f"{dropped} of {exog.shape[1]} event features are constant across "
+                "the training window, so the data cannot identify their effect. "
+                "They are excluded rather than estimated from the prior alone."
+            )
+            exog = exog[:, identified]
+            if exog_future is not None and exog_future.size:
+                exog_future = exog_future[:, identified]
+            if exog.shape[1] == 0:
+                exog = exog_future = None
 
     if likelihood == "binomial":
         return _fit_binomial(
@@ -292,6 +356,7 @@ def _fit_continuous(
     rng = np.random.default_rng(config.seed)
     level_draws = rng.gamma(shape=shape_draws, scale=mu_future / shape_draws)
 
+
     if likelihood == "hurdle_gamma":
         zero_intercept = _posterior_flat(trace, "zero_intercept")
         zero_trend = _posterior_flat(trace, "zero_trend")
@@ -304,12 +369,31 @@ def _fit_continuous(
     else:
         forecast_draws = level_draws
 
-    in_sample = np.exp(
-        _posterior_flat(trace, "intercept")[:, None]
-        + _posterior_flat(trace, "trend")[:, None] * time_index[None, :]
-        + offset
+    # Posterior predictive REPLICATES over the observed periods: the full linear
+    # predictor pushed through the Gamma observation model and, for a hurdle
+    # model, through its Bernoulli zero component too. Summarising the latent
+    # mean instead would report an interval far narrower than a single period's
+    # spread and would never reproduce a zero week.
+    log_in_sample = (
+        intercept[:, None] + trend[:, None] * time_index[None, :]
     )
-    ppc = posterior_predictive_summary(values, in_sample)
+    log_in_sample = _add_seasonal_at(trace, log_in_sample, tier, np.arange(values.size))
+    log_in_sample = _add_events(trace, log_in_sample, exog)
+    mu_in_sample = np.exp(log_in_sample + offset)
+    replicates = rng.gamma(shape=shape_draws, scale=mu_in_sample / shape_draws)
+    if likelihood == "hurdle_gamma":
+        logit_in_sample = (
+            _posterior_flat(trace, "zero_intercept")[:, None]
+            + _posterior_flat(trace, "zero_trend")[:, None] * time_index[None, :]
+        )
+        logit_in_sample = _add_seasonal_at(
+            trace, logit_in_sample, tier, np.arange(values.size), prefix="zero_"
+        )
+        logit_in_sample = _add_events(trace, logit_in_sample, exog, name="zero_event_effect")
+        p_in_sample = 1.0 / (1.0 + np.exp(-logit_in_sample))
+        replicates = replicates * (rng.random(p_in_sample.shape) < p_in_sample)
+    ppc = posterior_predictive_summary(values, replicates, interval_level=interval_level)
+    notes.extend(_dispersion_notes(ppc))
 
     lower, upper = _interval(forecast_draws, interval_level)
     return BayesianForecastResult(
@@ -365,10 +449,16 @@ def _fit_negative_binomial(
     probability = alpha_draws / (alpha_draws + mu_future)
     forecast_draws = rng.negative_binomial(alpha_draws * np.ones_like(mu_future), probability)
 
-    in_sample_mu = np.exp(
-        intercept[:, None] + trend[:, None] * time_index[None, :] + offset
+    log_in_sample = intercept[:, None] + trend[:, None] * time_index[None, :]
+    log_in_sample = _add_seasonal_at(trace, log_in_sample, tier, np.arange(counts.size))
+    log_in_sample = _add_events(trace, log_in_sample, exog)
+    mu_in_sample = np.exp(log_in_sample + offset)
+    in_sample_probability = alpha_draws / (alpha_draws + mu_in_sample)
+    replicates = rng.negative_binomial(
+        alpha_draws * np.ones_like(mu_in_sample), in_sample_probability
     )
-    ppc = posterior_predictive_summary(counts, in_sample_mu)
+    ppc = posterior_predictive_summary(counts, replicates, interval_level=interval_level)
+    notes.extend(_dispersion_notes(ppc))
 
     lower, upper = _interval(forecast_draws, interval_level)
     return BayesianForecastResult(
@@ -405,6 +495,12 @@ def _fit_binomial(
 
     # Periods with no trials observed nothing about the rate.
     informative = trials > 0
+    if not informative.any():
+        raise ValueError(
+            "Every period has a zero denominator, so the data contain no "
+            "information about the rate. Fitting here would sample the prior and "
+            "report it as an estimate."
+        )
     dropped = int((~informative).sum())
     if dropped:
         notes.append(
@@ -458,19 +554,26 @@ def _fit_binomial(
     )
 
 
-def _add_seasonal(trace, linear, tier, n_periods, horizon, prefix=""):
-    """Add the Fourier seasonal contribution for future periods, if fitted."""
+def _add_seasonal_at(trace, linear, tier, positions, prefix=""):
+    """Add the Fourier seasonal contribution at the given period positions."""
     if tier not in (TIER_MODERATE, TIER_RICH):
         return linear
     if f"{prefix}seasonal_sin" not in trace.posterior:
         return linear
     season = 52.0
-    future = np.arange(n_periods, n_periods + horizon)
-    sin_term = np.sin(2 * np.pi * future / season)
-    cos_term = np.cos(2 * np.pi * future / season)
+    positions = np.asarray(positions, dtype=float)
+    sin_term = np.sin(2 * np.pi * positions / season)
+    cos_term = np.cos(2 * np.pi * positions / season)
     sin_draws = _posterior_flat(trace, f"{prefix}seasonal_sin")[:, None]
     cos_draws = _posterior_flat(trace, f"{prefix}seasonal_cos")[:, None]
     return linear + sin_draws * sin_term[None, :] + cos_draws * cos_term[None, :]
+
+
+def _add_seasonal(trace, linear, tier, n_periods, horizon, prefix=""):
+    """Add the Fourier seasonal contribution for future periods, if fitted."""
+    return _add_seasonal_at(
+        trace, linear, tier, np.arange(n_periods, n_periods + horizon), prefix=prefix
+    )
 
 
 def _add_events(trace, linear, exog_future, name: str = "event_effect"):

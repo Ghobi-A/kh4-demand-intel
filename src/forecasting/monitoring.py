@@ -29,6 +29,10 @@ class BiasThresholds:
     rolling_window: int = 4
     #: Nominal interval level, used to judge coverage.
     interval_level: float = 0.8
+    #: Fewest forecasts needed before a bias run or a coverage figure is called
+    #: evidence. A run of 4 same-signed errors out of 6 happens roughly one time
+    #: in five by chance alone, so flagging it would be an overclaim.
+    min_forecasts_for_evidence: int = 12
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -130,6 +134,7 @@ def flag_persistent_bias(
         coverage_gap = (
             None if coverage is None else float(coverage - thresholds.interval_level)
         )
+        sufficient = len(ordered) >= thresholds.min_forecasts_for_evidence
 
         # Keep only the longest run per direction so a single long streak is
         # reported once rather than once per extra period.
@@ -141,18 +146,27 @@ def flag_persistent_bias(
 
         result["models"][str(model)] = {
             "n_forecasts": int(len(ordered)),
+            "sufficient_evidence": bool(sufficient),
             "mean_signed_error": float(np.mean(errors)) if errors.size else float("nan"),
             "materiality_threshold": tolerance,
-            "persistent_bias": bool(longest),
-            "bias_runs": list(longest.values()),
+            # A short evaluation window cannot establish persistent bias, so the
+            # flag is withheld rather than asserted from too few forecasts.
+            "persistent_bias": bool(longest) if sufficient else None,
+            "observed_bias_runs": list(longest.values()),
+            "bias_runs": list(longest.values()) if sufficient else [],
             "interval_coverage": coverage,
             "coverage_gap_vs_nominal": coverage_gap,
-            "interval_calibration": _describe_coverage(coverage, thresholds.interval_level),
+            "interval_calibration": (
+                _describe_coverage(coverage, thresholds.interval_level)
+                if sufficient
+                else "insufficient evidence"
+            ),
         }
     return result
 
 
 def _describe_coverage(coverage: float | None, nominal: float) -> str:
+    """Describe interval calibration relative to its nominal level."""
     if coverage is None:
         return "unknown"
     gap = coverage - nominal

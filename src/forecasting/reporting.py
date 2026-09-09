@@ -49,7 +49,9 @@ def _comparison_table(comparison: pd.DataFrame) -> list[str]:
         ("interval_coverage", "Coverage"),
         ("mean_interval_width", "Interval width"),
         ("persistent_bias", "Persistent bias"),
+        ("interval_calibration", "Interval calibration"),
         ("origins", "Origins"),
+        ("bias_evidence_forecasts", "Bias evidence (forecasts)"),
     ]
     present = [(key, label) for key, label in columns if key in comparison.columns]
     lines = [
@@ -148,7 +150,10 @@ def write_forecast_report(
                 "Refitting the posterior at every origin is expensive, so the "
                 "Bayesian model is scored on the most recent origins. This table "
                 "re-scores every model on exactly those origins, so no two models "
-                "are compared across different evaluation windows.",
+                "are compared across different evaluation windows. Accuracy is "
+                "therefore like-for-like, while the bias and calibration verdicts "
+                "use each model's full evaluation — a much larger sample for the "
+                "baselines, which is why the last column differs by row.",
                 "",
             ]
             lines += _comparison_table(matched)
@@ -162,6 +167,15 @@ def write_forecast_report(
         lines += ["", "### Forecast bias and reliability", ""]
 
         for model, flags in outcome["bias_flags"]["models"].items():
+            if not flags.get("sufficient_evidence", True):
+                lines.append(
+                    f"- `{model}`: only {flags.get('n_forecasts')} forecasts, too few to "
+                    "call bias or interval calibration either way. Mean signed error "
+                    f"{_fmt(flags.get('mean_signed_error'))}, interval coverage "
+                    f"{_fmt(flags.get('interval_coverage'))}, both reported as "
+                    "observations rather than verdicts."
+                )
+                continue
             runs = flags.get("bias_runs", [])
             description = (
                 ", ".join(
@@ -173,7 +187,8 @@ def write_forecast_report(
             lines.append(
                 f"- `{model}`: mean signed error {_fmt(flags.get('mean_signed_error'))}, "
                 f"interval coverage {_fmt(flags.get('interval_coverage'))} "
-                f"({flags.get('interval_calibration')}); {description}."
+                f"({flags.get('interval_calibration')}) over "
+                f"{flags.get('n_forecasts')} forecasts; {description}."
             )
 
         bayesian = outcome.get("bayesian", {})

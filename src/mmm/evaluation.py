@@ -200,6 +200,22 @@ def identifiability_notes(fit, truth: dict, recovery: pd.DataFrame) -> list[str]
             "reporting that it cannot separate the channels."
         )
 
+    estimated_total = float(contributions["contribution_mean"].sum())
+    true_total = float(sum(truth.get("true_contributions", {}).values()))
+    if true_total > 0 and estimated_total < true_total * 0.85:
+        notes.append(
+            f"Total media contribution is under-attributed: {estimated_total:,.0f} "
+            f"estimated against {true_total:,.0f} true. Weekly spend is fairly "
+            "stable, so each channel's saturated response is close to constant, "
+            "and a constant is not separable from the baseline. Only the "
+            "*variation* in media is identified from observational data like "
+            "this; its average level is absorbed by the intercept. Widening the "
+            "baseline prior does not recover it, which is what distinguishes a "
+            "structural identifiability limit from a prior artefact. Separating "
+            "the level needs spend variation the data does not contain, or an "
+            "experiment such as a geo holdout."
+        )
+
     notes.append(
         "Recovering a parameter from simulated data shows the estimator works on "
         "this process. It is not evidence of causal media effectiveness, which "

@@ -25,7 +25,8 @@
     "oof_folds": 5,
     "oof_rows": 200,
     "oof_matched_rows": 160,
-    "oof_match_note": "Rows matched to the labelled corpus (by id, or by normalised text when identifiers were stripped) use out-of-fold probabilities; the rest use the persisted model.",
+    "excluded_training_rows": 0,
+    "oof_match_note": "Rows matched to the labelled corpus (by id, or by normalised text when identifiers were stripped) use out-of-fold probabilities. A training row without an out-of-fold value is marked 'excluded_training_row' and contributes nothing to the demand proxy; it is never scored by the persisted model, which trained on it. Only rows outside the corpus use the persisted model.",
     "probability_source_counts": {
       "oof_supervised": 160,
       "persisted_supervised": 144

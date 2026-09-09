@@ -88,6 +88,17 @@ def _git_commit() -> str:
 def select_best_model(comparison: pd.DataFrame, bias_flags: dict) -> tuple[str, list[str]]:
     """Choose a model on accuracy, bias and interval calibration together.
 
+    WAPE ranks the candidates; mean absolute error and then simplicity break
+    ties. A model is demoted only when its own evaluation *demonstrates* a
+    problem: persistent directional bias, or interval coverage far from
+    nominal, judged over enough forecasts to mean anything.
+
+    A model evaluated over too few forecasts is never promoted over a more
+    accurate one. Being unproven is not a merit, and selecting on it would
+    reward whichever model was evaluated least — which on this project would
+    systematically favour the expensive Bayesian model, since it is backtested
+    over fewer origins than the baselines.
+
     Returns the chosen model and the reasoning, so a reader can see why the
     lowest-WAPE model was or was not selected.
     """
@@ -99,26 +110,46 @@ def select_best_model(comparison: pd.DataFrame, bias_flags: dict) -> tuple[str, 
         drop=True
     )
     leader = ranked.iloc[0]
-    reasoning.append(
-        f"Lowest WAPE: {leader['model']} ({leader['wape']:.3f})."
-    )
+    reasoning.append(f"Lowest WAPE: {leader['model']} ({leader['wape']:.3f}).")
 
-    def _is_sound(name: str) -> bool:
-        flags = bias_flags.get("models", {}).get(str(name), {})
+    def _flags(name: str) -> dict:
+        return bias_flags.get("models", {}).get(str(name), {})
+
+    def _has_evidence(name: str) -> bool:
+        return bool(_flags(name).get("sufficient_evidence", True))
+
+    def _is_disqualified(name: str) -> bool:
+        flags = _flags(name)
+        if not _has_evidence(name):
+            return False
         if flags.get("persistent_bias"):
-            return False
+            return True
         coverage = flags.get("interval_coverage")
-        if coverage is not None and abs(coverage - bias_flags["thresholds"]["interval_level"]) > 0.25:
-            return False
-        return True
+        nominal = bias_flags.get("thresholds", {}).get("interval_level", 0.8)
+        return coverage is not None and abs(coverage - nominal) > 0.25
 
-    for _, row in ranked.iterrows():
-        if _is_sound(row["model"]):
+    unproven = [str(row["model"]) for _, row in ranked.iterrows() if not _has_evidence(row["model"])]
+    if unproven:
+        reasoning.append(
+            "Evaluated over too few forecasts to judge, so not eligible for "
+            f"selection over a more accurate model: {', '.join(unproven)}."
+        )
+
+    eligible = ranked[[_has_evidence(row["model"]) for _, row in ranked.iterrows()]]
+    if eligible.empty:
+        reasoning.append(
+            "No model has enough forecasts to judge its reliability; the "
+            "lowest-WAPE model is reported, but nothing here is established."
+        )
+        return str(leader["model"]), reasoning
+
+    for _, row in eligible.iterrows():
+        if not _is_disqualified(row["model"]):
             if row["model"] != leader["model"]:
                 reasoning.append(
-                    f"{leader['model']} was demoted: it shows persistent directional bias "
-                    "or badly calibrated intervals, which cost more in planning than its "
-                    f"WAPE advantage. Selected {row['model']} instead."
+                    f"{leader['model']} was demoted: its evaluation shows persistent "
+                    "directional bias or badly calibrated intervals, which cost more "
+                    f"in planning than its WAPE advantage. Selected {row['model']}."
                 )
             else:
                 reasoning.append(
@@ -126,11 +157,14 @@ def select_best_model(comparison: pd.DataFrame, bias_flags: dict) -> tuple[str, 
                 )
             return str(row["model"]), reasoning
 
+    best_evaluated = eligible.iloc[0]
     reasoning.append(
-        "Every candidate shows persistent bias or poor interval calibration; the "
-        "lowest-WAPE model is reported, but none of them is reliable on this history."
+        "Every model with enough forecasts to judge shows persistent bias or "
+        "poor interval calibration. None of them is reliable on this history; "
+        f"{best_evaluated['model']} is reported as the lowest-error option, not "
+        "as a recommendation."
     )
-    return str(leader["model"]), reasoning
+    return str(best_evaluated["model"]), reasoning
 
 
 def _run_bayesian(
@@ -375,8 +409,14 @@ def run_target(
             BASELINE_REGISTRY[name]().complexity if name in BASELINE_REGISTRY else 5
         )
         flags = bias_flags["models"].get(str(name), {})
-        metrics["persistent_bias"] = bool(flags.get("persistent_bias", False))
+        persistent = flags.get("persistent_bias")
+        metrics["persistent_bias"] = "unknown" if persistent is None else bool(persistent)
         metrics["interval_calibration"] = flags.get("interval_calibration", "unknown")
+        # Accuracy here is computed on this table's own rows; the bias and
+        # calibration verdicts come from each model's full evaluation, which is
+        # a larger sample for the baselines than for the Bayesian model. The
+        # column is named so the two are not read as the same denominator.
+        metrics["bias_evidence_forecasts"] = int(flags.get("n_forecasts", len(group)))
         metrics["origins"] = origins
         return metrics
 

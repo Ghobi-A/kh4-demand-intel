@@ -1,7 +1,7 @@
 {
-  "run_id": "c8d4c90dcaa6",
-  "timestamp": "2026-09-08T16:03:39.326767+00:00",
-  "git_commit": "ab063db",
+  "run_id": "418aaacc1e35",
+  "timestamp": "2026-09-09T06:04:05.502061+00:00",
+  "git_commit": "b7d0c09",
   "input_path": "data/demo/weekly_demand_signals_demo.csv",
   "input_hash": "470790bb1fc09117",
   "observed_period": {
@@ -27,13 +27,14 @@
       "consecutive_periods": 4,
       "tolerance_fraction": 0.1,
       "rolling_window": 4,
-      "interval_level": 0.8
+      "interval_level": 0.8,
+      "min_forecasts_for_evidence": 12
     },
     "include_bayesian": true,
     "bayesian_backtest_origins": 3,
-    "bayesian_draws": 400,
-    "bayesian_tune": 400,
-    "bayesian_chains": 2,
+    "bayesian_draws": 1000,
+    "bayesian_tune": 1000,
+    "bayesian_chains": 4,
     "bayesian_target_accept": 0.9
   },
   "seed": 42,
@@ -150,31 +151,32 @@
       "selected_model": "naive",
       "selection_reasoning": [
         "Lowest WAPE: naive (0.816).",
-        "Every candidate shows persistent bias or poor interval calibration; the lowest-WAPE model is reported, but none of them is reliable on this history.",
+        "Evaluated over too few forecasts to judge, so not eligible for selection over a more accurate model: bayesian.",
+        "Every model with enough forecasts to judge shows persistent bias or poor interval calibration. None of them is reliable on this history; naive is reported as the lowest-error option, not as a recommendation.",
         "Selection used the origins on which every model, including the Bayesian one, was scored.",
         "The Bayesian model was backtested on the last 3 origins because refitting the posterior at every origin is expensive. Its comparison row is therefore based on fewer origins than the baselines."
       ],
       "likelihood": "hurdle_gamma",
       "likelihood_notes": [
-        "135 of 211 periods are zero, so a hurdle model is used: a Bernoulli component for whether a period is non-zero and a Gamma component for its level. The target is never rounded and no epsilon is added to force a Gamma to accept a zero."
+        "3 of 3 event features are constant across the training window, so the data cannot identify their effect. They are excluded rather than estimated from the prior alone.",
+        "135 of 211 periods are zero, so a hurdle model is used: a Bernoulli component for whether a period is non-zero and a Gamma component for its level. The target is never rounded and no epsilon is added to force a Gamma to accept a zero.",
+        "Posterior predictive check: replicates are less variable than the data (predicted sd 1.34 against observed 2.64). The model under-states how large the busiest periods get, so its intervals should not be read as capturing spike risk."
       ],
       "sampler": {
-        "draws": 400,
-        "tune": 400,
-        "chains": 2,
+        "draws": 1000,
+        "tune": 1000,
+        "chains": 4,
         "target_accept": 0.9,
         "seed": 42,
         "progressbar": false
       },
       "bayesian_diagnostics": {
-        "max_r_hat": 1.011671,
-        "min_ess_bulk": 819.955024,
-        "min_ess_tail": 424.340166,
+        "max_r_hat": 1.003921,
+        "min_ess_bulk": 4988.241187,
+        "min_ess_tail": 2355.802704,
         "divergences": 0,
-        "converged": false,
-        "warnings": [
-          "Max R-hat 1.012 exceeds 1.01: chains have not mixed, so posterior summaries are unreliable."
-        ]
+        "converged": true,
+        "warnings": []
       }
     },
     "total_comments": {
@@ -289,26 +291,29 @@
       "selected_model": "naive",
       "selection_reasoning": [
         "Lowest WAPE: naive (0.811).",
-        "Every candidate shows persistent bias or poor interval calibration; the lowest-WAPE model is reported, but none of them is reliable on this history.",
+        "Evaluated over too few forecasts to judge, so not eligible for selection over a more accurate model: bayesian.",
+        "Every model with enough forecasts to judge shows persistent bias or poor interval calibration. None of them is reliable on this history; naive is reported as the lowest-error option, not as a recommendation.",
         "Selection used the origins on which every model, including the Bayesian one, was scored.",
         "The Bayesian model was backtested on the last 3 origins because refitting the posterior at every origin is expensive. Its comparison row is therefore based on fewer origins than the baselines."
       ],
       "likelihood": "negative_binomial",
       "likelihood_notes": [
-        "Integer count target; variance/mean = 21.21, so a Negative Binomial is used to admit overdispersion a Poisson would not."
+        "3 of 3 event features are constant across the training window, so the data cannot identify their effect. They are excluded rather than estimated from the prior alone.",
+        "Integer count target; variance/mean = 21.21, so a Negative Binomial is used to admit overdispersion a Poisson would not.",
+        "Posterior predictive check: replicates are less variable than the data (predicted sd 2.78 against observed 5.53). The model under-states how large the busiest periods get, so its intervals should not be read as capturing spike risk."
       ],
       "sampler": {
-        "draws": 400,
-        "tune": 400,
-        "chains": 2,
+        "draws": 1000,
+        "tune": 1000,
+        "chains": 4,
         "target_accept": 0.9,
         "seed": 42,
         "progressbar": false
       },
       "bayesian_diagnostics": {
-        "max_r_hat": 1.006808,
-        "min_ess_bulk": 487.89024,
-        "min_ess_tail": 398.849276,
+        "max_r_hat": 1.001675,
+        "min_ess_bulk": 3749.440403,
+        "min_ess_tail": 2381.167814,
         "divergences": 0,
         "converged": true,
         "warnings": []
@@ -331,7 +336,8 @@
     "oof_folds": 5,
     "oof_rows": 200,
     "oof_matched_rows": 160,
-    "oof_match_note": "Rows matched to the labelled corpus (by id, or by normalised text when identifiers were stripped) use out-of-fold probabilities; the rest use the persisted model.",
+    "excluded_training_rows": 0,
+    "oof_match_note": "Rows matched to the labelled corpus (by id, or by normalised text when identifiers were stripped) use out-of-fold probabilities. A training row without an out-of-fold value is marked 'excluded_training_row' and contributes nothing to the demand proxy; it is never scored by the persisted model, which trained on it. Only rows outside the corpus use the persisted model.",
     "probability_source_counts": {
       "oof_supervised": 160,
       "persisted_supervised": 144

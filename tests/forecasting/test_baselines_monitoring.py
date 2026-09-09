@@ -132,8 +132,13 @@ def test_monitoring_records_signed_and_rolling_error() -> None:
     assert (table["interval_hit"] == 0).all()
 
 
+LENIENT = BiasThresholds(min_forecasts_for_evidence=1)
+
+
 def test_persistent_under_forecasting_is_flagged_with_its_direction() -> None:
-    flags = flag_persistent_bias(monitoring_table(_backtest_frame([7.0] * 6)))["models"]["m"]
+    flags = flag_persistent_bias(
+        monitoring_table(_backtest_frame([7.0] * 6)), LENIENT
+    )["models"]["m"]
 
     assert flags["persistent_bias"] is True
     assert flags["bias_runs"][0]["direction"] == "under_forecasting"
@@ -141,7 +146,9 @@ def test_persistent_under_forecasting_is_flagged_with_its_direction() -> None:
 
 
 def test_persistent_over_forecasting_is_flagged() -> None:
-    flags = flag_persistent_bias(monitoring_table(_backtest_frame([15.0] * 6)))["models"]["m"]
+    flags = flag_persistent_bias(
+        monitoring_table(_backtest_frame([15.0] * 6)), LENIENT
+    )["models"]["m"]
 
     assert flags["persistent_bias"] is True
     assert flags["bias_runs"][0]["direction"] == "over_forecasting"
@@ -149,14 +156,16 @@ def test_persistent_over_forecasting_is_flagged() -> None:
 
 def test_alternating_errors_are_not_called_persistent_bias() -> None:
     flags = flag_persistent_bias(
-        monitoring_table(_backtest_frame([13.0, 7.0, 13.0, 7.0, 13.0, 7.0]))
+        monitoring_table(_backtest_frame([13.0, 7.0, 13.0, 7.0, 13.0, 7.0])), LENIENT
     )["models"]["m"]
 
     assert flags["persistent_bias"] is False
 
 
 def test_small_errors_below_the_materiality_threshold_do_not_flag() -> None:
-    flags = flag_persistent_bias(monitoring_table(_backtest_frame([9.95] * 8)))["models"]["m"]
+    flags = flag_persistent_bias(
+        monitoring_table(_backtest_frame([9.95] * 8)), LENIENT
+    )["models"]["m"]
 
     assert flags["persistent_bias"] is False
 
@@ -164,17 +173,23 @@ def test_small_errors_below_the_materiality_threshold_do_not_flag() -> None:
 def test_bias_thresholds_are_configurable() -> None:
     monitoring = monitoring_table(_backtest_frame([7.0] * 3))
 
-    strict = flag_persistent_bias(monitoring, BiasThresholds(consecutive_periods=3))
-    lenient = flag_persistent_bias(monitoring, BiasThresholds(consecutive_periods=10))
+    strict = flag_persistent_bias(
+        monitoring, BiasThresholds(consecutive_periods=3, min_forecasts_for_evidence=1)
+    )
+    lenient = flag_persistent_bias(
+        monitoring, BiasThresholds(consecutive_periods=10, min_forecasts_for_evidence=1)
+    )
 
     assert strict["models"]["m"]["persistent_bias"] is True
     assert lenient["models"]["m"]["persistent_bias"] is False
 
 
 def test_interval_calibration_is_described_against_the_nominal_level() -> None:
-    narrow = flag_persistent_bias(monitoring_table(_backtest_frame([7.0] * 6)))["models"]["m"]
+    narrow = flag_persistent_bias(
+        monitoring_table(_backtest_frame([7.0] * 6)), LENIENT
+    )["models"]["m"]
     wide = flag_persistent_bias(
-        monitoring_table(_backtest_frame([10.0] * 6, lower=0.0, upper=20.0))
+        monitoring_table(_backtest_frame([10.0] * 6, lower=0.0, upper=20.0)), LENIENT
     )["models"]["m"]
 
     assert narrow["interval_calibration"] == "too narrow (overconfident)"
@@ -236,3 +251,82 @@ def test_guardrails_report_when_there_is_no_history_to_compare_against() -> None
     warnings = scenario_guardrails(BehaviouralScenario(), observed=[], baseline_mean=[1.0])
 
     assert warnings and "No observed history" in warnings[0]
+
+
+def test_bias_is_not_asserted_from_too_few_forecasts() -> None:
+    """A run of 4 same-signed errors in 6 happens ~1 time in 5 by chance."""
+    monitoring = monitoring_table(_backtest_frame([7.0] * 6))
+
+    flags = flag_persistent_bias(monitoring)["models"]["m"]
+
+    assert flags["n_forecasts"] == 6
+    assert flags["sufficient_evidence"] is False
+    assert flags["persistent_bias"] is None
+    assert flags["interval_calibration"] == "insufficient evidence"
+    # The observed run is still recorded, just not promoted to a verdict.
+    assert flags["observed_bias_runs"]
+
+
+def test_bias_is_asserted_once_there_are_enough_forecasts() -> None:
+    monitoring = monitoring_table(_backtest_frame([7.0] * 20))
+
+    flags = flag_persistent_bias(monitoring)["models"]["m"]
+
+    assert flags["sufficient_evidence"] is True
+    assert flags["persistent_bias"] is True
+    assert flags["bias_runs"]
+
+
+def test_an_unproven_model_never_displaces_a_proven_one() -> None:
+    """Being evaluated less is not a merit.
+
+    A better WAPE measured over a handful of forecasts is not comparable with
+    one measured over many, and selecting on it would systematically favour
+    whichever model was backtested least.
+    """
+    from src.forecasting.experiment import select_best_model
+
+    comparison = pd.DataFrame(
+        [
+            {"model": "naive", "wape": 0.30, "mae": 3.0, "complexity": 1},
+            {"model": "bayesian", "wape": 0.20, "mae": 2.0, "complexity": 5},
+        ]
+    )
+    flags = {
+        "thresholds": {"interval_level": 0.8},
+        "models": {
+            "naive": {"persistent_bias": False, "interval_coverage": 0.8,
+                      "sufficient_evidence": True},
+            "bayesian": {"persistent_bias": None, "interval_coverage": 0.33,
+                         "sufficient_evidence": False},
+        },
+    }
+
+    selected, reasoning = select_best_model(comparison, flags)
+
+    assert selected == "naive"
+    assert any("too few forecasts" in line for line in reasoning)
+
+
+def test_when_nothing_has_enough_evidence_the_report_says_nothing_is_established() -> None:
+    from src.forecasting.experiment import select_best_model
+
+    comparison = pd.DataFrame(
+        [
+            {"model": "naive", "wape": 0.30, "mae": 3.0, "complexity": 1},
+            {"model": "bayesian", "wape": 0.94, "mae": 9.0, "complexity": 5},
+        ]
+    )
+    flags = {
+        "thresholds": {"interval_level": 0.8},
+        "models": {
+            "naive": {"persistent_bias": None, "sufficient_evidence": False},
+            "bayesian": {"persistent_bias": None, "sufficient_evidence": False},
+        },
+    }
+
+    selected, reasoning = select_best_model(comparison, flags)
+
+    # The lowest-error model is still named, but explicitly not endorsed.
+    assert selected == "naive"
+    assert any("nothing here is established" in line for line in reasoning)

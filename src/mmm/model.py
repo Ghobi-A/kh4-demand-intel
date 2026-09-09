@@ -59,9 +59,11 @@ class MMMSamplerConfig:
     draws: int = 1000
     tune: int = 1000
     chains: int = 2
-    # The media transforms create a mildly awkward posterior geometry, so this
-    # runs tighter than the usual 0.9 to keep divergences down.
-    target_accept: float = 0.95
+    # Centring time and the target, and giving the half-saturation point a
+    # prior on the scale spend is measured in, fixed the posterior geometry
+    # that used to produce divergences. The sampler therefore runs at the
+    # ordinary 0.9 rather than masking geometry problems with a tighter step.
+    target_accept: float = 0.9
     seed: int = 42
     progressbar: bool = False
 
@@ -149,7 +151,20 @@ def fit_mmm(
     scaled_spend = spend / spend_scale
 
     sales = data[target].to_numpy(dtype=float)
-    sales_scale = float(np.mean(sales))
+    sales_mean = float(np.mean(sales))
+    sales_std = float(np.std(sales)) or 1.0
+    # Model the centred target so the intercept is the average level rather than
+    # the level at week zero, and express every prior in units of the observed
+    # spread so no prior is accidentally strong or vacuous.
+    sales_centred = sales - sales_mean
+
+    # Centre time as well. With raw week numbers the intercept is the value at
+    # week 0, which is strongly correlated with the trend; that ridge is what
+    # the sampler was struggling with. Centring makes the two near-orthogonal.
+    week_mean = float(np.mean(weeks))
+    week_scale = float(max(n / 2.0, 1.0))
+    weeks_centred = (weeks - week_mean) / week_scale
+
     price = data["price"].to_numpy(dtype=float)
     price_centred = price - float(np.mean(price))
     promotion = data["promotion"].to_numpy(dtype=float)
@@ -158,15 +173,22 @@ def fit_mmm(
     seasonal_cos = np.cos(2 * np.pi * weeks / 52.0)
 
     with pm.Model():
-        baseline = pm.Normal("baseline", mu=sales_scale, sigma=sales_scale * 0.5)
-        trend = pm.Normal("trend", mu=0.0, sigma=sales_scale * 0.01)
+        baseline = pm.Normal("baseline", mu=0.0, sigma=sales_std * 5.0)
+        trend = pm.Normal("trend", mu=0.0, sigma=sales_std)
 
         # Media effects are constrained non-negative: spending on a channel is
         # not assumed to reduce sales.
-        beta = pm.HalfNormal("beta", sigma=sales_scale * 0.5, shape=len(channels))
+        beta = pm.HalfNormal("beta", sigma=sales_std, shape=len(channels))
         decay = pm.Beta("decay", alpha=2.0, beta=2.0, shape=len(channels))
         saturation_alpha = pm.Gamma("saturation_alpha", alpha=3.0, beta=2.0, shape=len(channels))
-        saturation_theta = pm.Gamma("saturation_theta", alpha=3.0, beta=3.0, shape=len(channels))
+        # Spend is scaled by its own channel mean, so a half-saturation point
+        # near 1 says "this channel half-saturates around its typical spend".
+        # A LogNormal keeps theta positive and, unlike a diffuse prior, stops it
+        # drifting to where it trades off against beta along a ridge — the other
+        # source of the divergences.
+        saturation_theta = pm.LogNormal(
+            "saturation_theta", mu=0.0, sigma=0.5, shape=len(channels)
+        )
 
         media_contributions = []
         for index, _channel in enumerate(channels):
@@ -176,17 +198,15 @@ def fit_mmm(
         media_total = pt.sum(pt.stack(media_contributions, axis=0), axis=0)
         pm.Deterministic("media_contribution", pt.stack(media_contributions, axis=0))
 
-        price_coefficient = pm.Normal("price_coefficient", mu=0.0, sigma=sales_scale * 0.05)
-        promotion_coefficient = pm.Normal(
-            "promotion_coefficient", mu=0.0, sigma=sales_scale * 0.3
-        )
-        event_coefficient = pm.Normal("event_coefficient", mu=0.0, sigma=sales_scale * 0.3)
-        season_sin_coefficient = pm.Normal("season_sin", mu=0.0, sigma=sales_scale * 0.2)
-        season_cos_coefficient = pm.Normal("season_cos", mu=0.0, sigma=sales_scale * 0.2)
+        price_coefficient = pm.Normal("price_coefficient", mu=0.0, sigma=sales_std)
+        promotion_coefficient = pm.Normal("promotion_coefficient", mu=0.0, sigma=sales_std)
+        event_coefficient = pm.Normal("event_coefficient", mu=0.0, sigma=sales_std)
+        season_sin_coefficient = pm.Normal("season_sin", mu=0.0, sigma=sales_std)
+        season_cos_coefficient = pm.Normal("season_cos", mu=0.0, sigma=sales_std)
 
         mu = (
             baseline
-            + trend * weeks
+            + trend * weeks_centred
             + media_total
             + price_coefficient * price_centred
             + promotion_coefficient * promotion
@@ -194,8 +214,8 @@ def fit_mmm(
             + season_sin_coefficient * seasonal_sin
             + season_cos_coefficient * seasonal_cos
         )
-        sigma = pm.HalfNormal("sigma", sigma=sales_scale * 0.2)
-        pm.Normal("obs", mu=mu, sigma=sigma, observed=sales)
+        sigma = pm.HalfNormal("sigma", sigma=sales_std)
+        pm.Normal("obs", mu=mu, sigma=sigma, observed=sales_centred)
 
         trace = pm.sample(
             draws=config.draws,
@@ -229,9 +249,10 @@ def fit_mmm(
     contributions = _contribution_table(channels, media_draws, sales)
     curves = _response_curves(channels, posterior, spend, spend_scale)
 
-    fitted = (
-        posterior["baseline"][:, None]
-        + posterior["trend"][:, None] * weeks[None, :]
+    fitted_mean = (
+        sales_mean
+        + posterior["baseline"][:, None]
+        + posterior["trend"][:, None] * weeks_centred[None, :]
         + media_draws.sum(axis=1)
         + posterior["price_coefficient"][:, None] * price_centred[None, :]
         + posterior["promotion_coefficient"][:, None] * promotion[None, :]
@@ -239,11 +260,24 @@ def fit_mmm(
         + posterior["season_sin"][:, None] * seasonal_sin[None, :]
         + posterior["season_cos"][:, None] * seasonal_cos[None, :]
     )
-    ppc = posterior_predictive_summary(sales, fitted)
+    # Posterior predictive REPLICATES: the fitted mean pushed through the
+    # observation model. Summarising the mean alone would report a far too
+    # narrow interval and understate coverage.
+    rng = np.random.default_rng(config.seed)
+    replicates = rng.normal(fitted_mean, posterior["sigma"][:, None])
+    ppc = posterior_predictive_summary(sales, replicates)
 
     return MMMFit(
         channels=channels,
-        posterior={**posterior, "spend_scale": spend_scale, "price_mean": float(np.mean(price))},
+        posterior={
+            **posterior,
+            "spend_scale": spend_scale,
+            "price_mean": float(np.mean(price)),
+            "sales_mean": sales_mean,
+            "sales_std": sales_std,
+            "week_mean": week_mean,
+            "week_scale": week_scale,
+        },
         diagnostics=diagnostics,
         contributions=contributions,
         response_curves=curves,
@@ -268,6 +302,9 @@ def fit_mmm(
         notes=[
             "Fitted to synthetic data with known parameters. A coefficient here "
             "describes this simulation, not real media effectiveness.",
+            "Time and the target are centred and priors are expressed in units "
+            "of the observed spread, which removes the baseline/trend ridge that "
+            "previously caused divergent transitions.",
         ],
     )
 
@@ -330,7 +367,12 @@ def predict_sales(fit: MMMFit, data: pd.DataFrame, n_draws: int | None = None) -
     channels = fit.channels
     posterior = fit.posterior
     spend = data[channels].to_numpy(dtype=float)
-    weeks = np.arange(len(data))
+    # Reuse the centring the model was fitted with; recomputing it here would
+    # silently shift the trend for any plan of a different length.
+    week_mean = float(np.asarray(posterior.get("week_mean", 0.0)))
+    week_scale = float(np.asarray(posterior.get("week_scale", 1.0))) or 1.0
+    sales_mean = float(np.asarray(posterior.get("sales_mean", 0.0)))
+    weeks = (np.arange(len(data)) - week_mean) / week_scale
     scale = posterior["spend_scale"]
 
     total_draws = posterior["baseline"].shape[0]
@@ -359,7 +401,8 @@ def predict_sales(fit: MMMFit, data: pd.DataFrame, n_draws: int | None = None) -
             )
             media += posterior["beta"][draw, channel_index] * saturated
         predictions[position] = (
-            posterior["baseline"][draw]
+            sales_mean
+            + posterior["baseline"][draw]
             + posterior["trend"][draw] * weeks
             + media
             + posterior["price_coefficient"][draw] * price_centred

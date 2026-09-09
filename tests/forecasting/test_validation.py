@@ -128,3 +128,114 @@ def test_a_failing_model_at_one_origin_does_not_lose_the_others() -> None:
 
     assert 12 not in set(results["origin"])
     assert len(results) > 0
+
+
+def test_no_fitted_quantity_depends_on_data_after_the_origin() -> None:
+    """End-to-end guarantee A: mutating the future cannot move an origin's fit.
+
+    This covers everything a forecaster derives from its training slice —
+    level, residual scale and therefore the interval — not just the point
+    forecast.
+    """
+    from src.forecasting.baselines import BASELINE_REGISTRY
+
+    y = pd.Series(np.abs(np.sin(np.arange(60) / 3.0)) * 10 + 2)
+    splits = rolling_origin_splits(60, min_train=20, horizon=2, step=4)
+    tampered = y.copy()
+    tampered.iloc[40:] = 500.0
+
+    for name, factory in BASELINE_REGISTRY.items():
+        if name in {"seasonal_naive", "ridge_event"}:
+            continue
+        before = backtest(factory, y, splits, model_name=name)
+        after = backtest(factory, tampered, splits, model_name=name)
+        early_before = before[before["origin"] < 40][["origin", "forecast", "lower", "upper"]]
+        early_after = after[after["origin"] < 40][["origin", "forecast", "lower", "upper"]]
+        pd.testing.assert_frame_equal(
+            early_before.reset_index(drop=True),
+            early_after.reset_index(drop=True),
+            check_exact=False,
+            obj=name,
+        )
+
+
+def test_rolling_and_lagged_features_never_read_past_the_origin() -> None:
+    """Guarantee A for derived features: the ridge model's design matrix."""
+    from src.forecasting.baselines import RidgeEventForecaster
+
+    y = np.arange(40, dtype=float)
+    model = RidgeEventForecaster(lags=3)
+    design, targets = model._design(y, None)
+
+    # Row i predicts y[i + lags] from strictly earlier values only.
+    for row_index in range(design.shape[0]):
+        target_position = row_index + model.lags
+        assert targets[row_index] == y[target_position]
+        assert design[row_index].max() < y[target_position]
+
+
+def test_scaling_and_transformation_are_fitted_on_the_training_slice_only() -> None:
+    """Residual scale, which sets interval width, must not see the test periods."""
+    from src.forecasting.baselines import MeanForecaster
+
+    y = pd.Series(np.concatenate([np.full(30, 5.0), np.full(30, 1000.0)]))
+    splits = rolling_origin_splits(60, min_train=20, horizon=2, step=10)
+
+    results = backtest(MeanForecaster, y, splits, model_name="mean")
+    first_origin = results[results["origin"] == 20]
+
+    # At origin 20 the series has only ever been 5.0, so the forecast and its
+    # interval must reflect that, despite the later jump to 1000.
+    assert first_origin["forecast"].tolist() == pytest.approx([5.0, 5.0])
+    assert first_origin["upper"].max() < 100.0
+
+
+def test_event_features_are_identical_whether_or_not_later_events_exist() -> None:
+    """Guarantee B: a later-announced event cannot alter an earlier origin."""
+    periods = pd.Series(pd.date_range("2026-01-05", periods=30, freq="7D", tz="UTC"))
+    early_only = pd.DataFrame(
+        {
+            "event_date": pd.to_datetime(["2026-02-02"], utc=True),
+            "announced_date": pd.to_datetime(["2026-01-26"], utc=True),
+            "event_name": ["Known event"],
+            "event_window": ["post_known"],
+            "event_type": ["trailer"],
+            "major_announcement_flag": [1],
+            "trailer_flag": [1],
+        }
+    )
+    with_later = pd.concat(
+        [
+            early_only,
+            pd.DataFrame(
+                {
+                    "event_date": pd.to_datetime(["2026-06-01"], utc=True),
+                    "announced_date": pd.to_datetime(["2026-05-25"], utc=True),
+                    "event_name": ["Later event"],
+                    "event_window": ["post_later"],
+                    "event_type": ["trailer"],
+                    "major_announcement_flag": [1],
+                    "trailer_flag": [1],
+                }
+            ),
+        ],
+        ignore_index=True,
+    )
+
+    origin = 10
+    a_train, a_future = ExogBuilder(periods, early_only)(origin, 2)
+    b_train, b_future = ExogBuilder(periods, with_later)(origin, 2)
+
+    assert np.array_equal(np.asarray(a_train), np.asarray(b_train))
+    assert np.array_equal(np.asarray(a_future), np.asarray(b_future))
+
+
+def test_model_selection_reads_only_backtested_forecasts() -> None:
+    """Selection must not be able to consult the held-out actuals directly."""
+    import inspect
+
+    from src.forecasting import experiment as experiment_module
+
+    source = inspect.getsource(experiment_module.select_best_model)
+    for forbidden in ["dataset", "frame[", "read_csv", "values["]:
+        assert forbidden not in source

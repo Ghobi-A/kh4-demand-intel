@@ -16,7 +16,11 @@ def _comparison(rows) -> pd.DataFrame:
 
 
 def _flags(models) -> dict:
-    return {"thresholds": {"interval_level": 0.8}, "models": models}
+    """Bias flags for selection tests, evidenced unless a test says otherwise."""
+    evidenced = {
+        name: {"sufficient_evidence": True, **values} for name, values in models.items()
+    }
+    return {"thresholds": {"interval_level": 0.8}, "models": evidenced}
 
 
 def test_lowest_wape_wins_when_it_is_also_sound() -> None:
@@ -99,12 +103,16 @@ def test_ties_go_to_the_simpler_model() -> None:
 
 def test_when_no_model_is_sound_the_report_says_so() -> None:
     comparison = _comparison([{"model": "naive", "wape": 0.5, "mae": 5.0, "complexity": 1}])
-    flags = _flags({"naive": {"persistent_bias": True, "interval_coverage": 0.8}})
+    flags = _flags(
+        {"naive": {"persistent_bias": True, "interval_coverage": 0.8,
+                   "sufficient_evidence": True}}
+    )
 
     selected, reasoning = select_best_model(comparison, flags)
 
     assert selected == "naive"
-    assert any("none of them is reliable" in line for line in reasoning)
+    assert any("None of them is reliable" in line for line in reasoning)
+    assert any("not as a recommendation" in line for line in reasoning)
 
 
 def _write_weekly(tmp_path, sample_only: bool):
@@ -254,3 +262,42 @@ def test_bayesian_model_is_scored_on_matched_origins(tmp_path, monkeypatch) -> N
     report = (tmp_path / "reports" / "forecast_report.md").read_text()
     assert "Matched-origin comparison" in report
     assert np.isfinite(matched["wape"]).all()
+
+
+def test_committed_forecasting_run_reports_its_diagnostics_and_honest_ordering() -> None:
+    """Guard the artefacts the README and report quote.
+
+    In particular: a simple baseline is allowed to win, and if it does, nothing
+    in the pipeline may quietly promote the Bayesian model over it.
+    """
+    import json
+    from pathlib import Path as _Path
+
+    report_dir = _Path("reports/demo_forecasting")
+    metadata_path = report_dir / "run_metadata.json"
+    if not metadata_path.exists():
+        pytest.skip("Forecasting report not generated in this checkout")
+
+    metadata = json.loads(metadata_path.read_text())
+    assert metadata["sample_only"] is True
+    assert metadata["evaluation_status"] == "demo_only"
+
+    matched = pd.read_csv(report_dir / "model_comparison_matched_origins.csv")
+    for target, details in metadata["targets"].items():
+        if not details.get("usable"):
+            continue
+        diagnostics = details.get("bayesian_diagnostics") or {}
+        if diagnostics:
+            assert diagnostics["divergences"] == 0
+            assert diagnostics["max_r_hat"] < 1.01
+            assert diagnostics["converged"] is True
+
+        rows = matched[matched["target"] == target]
+        if rows.empty or "bayesian" not in set(rows["model"]):
+            continue
+        bayesian_wape = float(rows.loc[rows["model"] == "bayesian", "wape"].iloc[0])
+        best_baseline = float(rows.loc[rows["model"] != "bayesian", "wape"].min())
+        selected = details["selected_model"]
+        if bayesian_wape > best_baseline:
+            # The Bayesian model is worse here; the selection must reflect that.
+            assert selected != "bayesian", target

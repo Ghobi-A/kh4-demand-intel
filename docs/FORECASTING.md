@@ -153,6 +153,42 @@ also exceed a materiality threshold, so a long run of negligible errors does not
 raise a false alarm. Both the run length and the materiality fraction are
 configurable.
 
+## Posterior predictive checking
+
+The check compares observations against posterior predictive **replicates**:
+draws pushed all the way through the observation model, including its sampling
+noise and, for the hurdle model, its Bernoulli zero component. Summarising draws
+of the latent *mean* instead makes a well-calibrated model look badly calibrated,
+because the mean of a series is estimated far more precisely than any single
+future observation of it. That defect was present in an earlier revision and
+produced a coverage figure near 0.45 against a 0.90 nominal level; it is now
+covered by regression tests.
+
+Two failures the current check reports honestly:
+
+- The model reproduces the observed share of empty weeks closely, so the hurdle
+  component is doing its job.
+- Its replicates are less variable than the data, so it understates how large the
+  busiest weeks get. Its intervals should not be read as capturing spike risk.
+
+## Identifiability
+
+Event features that never vary inside a training window are dropped rather than
+estimated. In the demo data every calendar event post-dates the observations, so
+all event columns are constant; a coefficient fitted there would be a draw from
+its prior applied to the forecast as though it had been learned from data.
+
+## Evidence thresholds
+
+Persistent bias and interval calibration are only reported as verdicts when there
+are enough forecasts to support one. A run of four same-signed errors out of six
+occurs roughly one time in five by chance, so with fewer than twelve forecasts
+both are reported as observations and the model is marked
+`insufficient evidence`. Such a model is never *selected over* a more accurate
+one either: being evaluated less is not a merit, and rewarding it would
+systematically favour the Bayesian model, which is backtested over fewer origins
+than the baselines because refitting a posterior at every origin is expensive.
+
 ## Limitations
 
 - Community signals are not unit sales, and no purchase data exists to validate against.

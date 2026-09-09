@@ -15,27 +15,27 @@
   "baseline_total_spend": 4270440.083588984,
   "scenario_total_spend": 4537733.061479356,
   "spend_change": 267292.9778903723,
-  "baseline_expected_sales": 819368.9750140441,
-  "scenario_expected_sales": 825335.0579451814,
-  "difference_mean": 5966.082931137229,
-  "difference_lower": -2126.1722781578205,
-  "difference_upper": 14577.366744131386,
-  "difference_percent": 0.7281314173550407,
-  "probability_of_increase": 0.875,
+  "baseline_expected_sales": 821729.6249752832,
+  "scenario_expected_sales": 830190.3121781263,
+  "difference_mean": 8460.687202843223,
+  "difference_lower": 233.5836586268617,
+  "difference_upper": 15858.310402027368,
+  "difference_percent": 1.0296193474949515,
+  "probability_of_increase": 0.96,
   "channel_contributions_baseline": {
-    "video_spend": 117284.91820433199,
-    "paid_search_spend": 137778.99151464624,
-    "social_spend": 68150.42540036632
+    "video_spend": 59903.17933785309,
+    "paid_search_spend": 65304.16126935311,
+    "social_spend": 29845.37041280876
   },
   "channel_contributions_scenario": {
-    "video_spend": 130939.77598404745,
-    "paid_search_spend": 137778.99151464624,
-    "social_spend": 60307.66313800614
+    "video_spend": 73745.12774265575,
+    "paid_search_spend": 65304.16126935311,
+    "social_spend": 23193.475508289506
   },
   "channel_contribution_change": {
-    "video_spend": 13654.857779715458,
+    "video_spend": 13841.948404802657,
     "paid_search_spend": 0.0,
-    "social_spend": -7842.762262360186
+    "social_spend": -6651.894904519253
   },
   "warnings": [],
   "interpretation": "Change in expected simulated sales under the stated plan, in a simulated market. Not a forecast of real commercial performance."

@@ -57,6 +57,44 @@ Five things are kept strictly apart, in code and in every report:
 unreleased. No Square Enix sales, budgets, ROAS, pricing decisions or campaign
 data appear anywhere in this project, and none are inferred.
 
+## What the evaluation actually found
+
+The headline result is negative, and it is the point rather than an
+embarrassment.
+
+**A naive last-value forecast beats the Bayesian model.** On matched forecast
+origins the naive baseline reaches a WAPE of about 0.82 against roughly 0.94 for
+the hurdle-Gamma model. That ordering is preserved: no model here was tuned to
+reverse it.
+
+**Better convergence did not change that.** The Bayesian model was reparameterised
+during a validation pass (centred time, unidentified event features dropped) and
+now samples cleanly: zero divergences, R-hat about 1.004, bulk ESS in the
+thousands. It still loses. The earlier marginal convergence was not the reason a
+sophisticated model was losing to a one-line one.
+
+**Why naive wins here.** The weekly proxy is sparse and spiky: about 64% of weeks
+contain no actionable discussion at all, and activity arrives in short bursts
+around events. There is no seasonal signal to exploit, the trend is weak, and the
+events in the calendar post-date the observed window, so their coefficients are
+not identifiable and are excluded. A model whose structure encodes trend and
+seasonality has nothing to work with, while "tomorrow looks like today" is hard to
+beat on a series dominated by zeros.
+
+**No model here is reliable.** Every model with enough forecasts to judge shows
+persistent directional bias, so the report names the lowest-error option without
+recommending it. The posterior predictive check adds a second honest failure: the
+model reproduces the share of empty weeks almost exactly, but its replicates are
+less variable than the data, so it understates how large the busiest weeks get.
+
+**What would change with real commercial data.** The limiting factor is the
+target, not the method. With first-party data (units sold, wishlist additions,
+pre-orders, store traffic) the same pipeline would forecast a quantity that
+actually has a level and a trend, events could be evaluated against outcomes
+rather than discussion, and the marketing mix model could be fitted to observed
+spend instead of a simulation. Nothing about the validation design would need to
+change; it is built to make a weak result visible rather than to hide one.
+
 ## 1. Problem
 
 Fan discussion volume and sentiment do not reveal *behaviour*: purchase

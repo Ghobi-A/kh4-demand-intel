@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from src.mmm.evaluation import evaluate_recovery, identifiability_notes
@@ -176,3 +177,92 @@ def test_end_to_end_scenario_runs_on_a_real_fit() -> None:
     assert result["difference_lower"] <= result["difference_upper"]
     assert set(result["channel_contribution_change"]) == set(fit.channels)
     assert result["scenario_total_spend"] != result["baseline_total_spend"] or True
+
+
+def test_real_signal_columns_cannot_reach_the_mmm_fitter() -> None:
+    """The synthetic boundary is enforced in code, not only in documentation."""
+    real_like = pd.DataFrame(
+        {
+            "week": range(30),
+            "video_spend": np.ones(30),
+            "paid_search_spend": np.ones(30),
+            "social_spend": np.ones(30),
+            "price": np.full(30, 50.0),
+            "promotion": np.zeros(30),
+            "event": np.zeros(30),
+            "simulated_sales": np.full(30, 100.0),
+            # A frame carrying real behavioural signal columns.
+            "actionable_probability_mass": np.ones(30),
+            "data_type": "real",
+        }
+    )
+
+    with pytest.raises(ValueError, match="synthetic"):
+        fit_mmm(real_like, config=SMOKE)
+
+
+def test_a_frame_with_no_data_type_marker_is_treated_as_synthetic_only_by_default() -> None:
+    """Absent marker must not silently admit unknown-provenance data as real."""
+    frame, _ = generate_synthetic_mmm(SyntheticMMMConfig(n_weeks=30))
+    unmarked = frame.drop(columns=["data_type"])
+
+    # The generator's own output stays acceptable; anything claiming to be real
+    # is refused by the check above.
+    fit = fit_mmm(unmarked, config=SMOKE)
+    assert fit.data_type == "synthetic"
+
+
+@pytest.mark.pymc_smoke
+def test_posterior_predictive_uses_replicates_not_the_fitted_mean() -> None:
+    """Regression: the PPC once summarised the mean and reported ~0.45 coverage."""
+    frame, _ = generate_synthetic_mmm(SyntheticMMMConfig(n_weeks=52))
+
+    fit = fit_mmm(frame, config=MMMSamplerConfig(draws=300, tune=300, chains=2, seed=42))
+    ppc = fit.posterior_predictive
+
+    assert ppc["predicted_std"] == pytest.approx(ppc["observed_std"], rel=0.4)
+    assert ppc["ppc_interval_coverage"] > 0.75
+    assert ppc["nominal_interval_level"] == pytest.approx(0.9)
+
+
+@pytest.mark.pymc_smoke
+def test_reparameterisation_keeps_divergences_negligible_at_smoke_settings() -> None:
+    """Centred time and a scale-aware saturation prior removed the divergences.
+
+    Asserted as a rate, not an absolute zero, because at these deliberately
+    short chains an isolated divergence is ordinary sampler behaviour rather
+    than evidence of bad geometry. The strict claim — zero divergences — is
+    asserted against the committed run in
+    ``test_committed_mmm_run_converged_without_divergences``, which is the
+    artefact the report actually quotes.
+    """
+    frame, _ = generate_synthetic_mmm(SyntheticMMMConfig(n_weeks=80))
+    draws, chains = 400, 2
+
+    fit = fit_mmm(frame, config=MMMSamplerConfig(draws=draws, tune=400, chains=chains, seed=42))
+
+    assert fit.diagnostics["divergences"] / (draws * chains) < 0.01
+    assert fit.diagnostics["max_r_hat"] < 1.02
+
+
+def test_committed_mmm_run_converged_without_divergences() -> None:
+    """The diagnostics the MMM report quotes must be the ones on disk."""
+    import json
+    from pathlib import Path as _Path
+
+    diagnostics_path = _Path("reports/mmm/diagnostics.json")
+    if not diagnostics_path.exists():
+        pytest.skip("MMM report not generated in this checkout")
+
+    payload = json.loads(diagnostics_path.read_text())
+    diagnostics = payload["diagnostics"]
+    ppc = payload["posterior_predictive"]
+
+    assert diagnostics["divergences"] == 0
+    assert diagnostics["max_r_hat"] < 1.01
+    assert diagnostics["min_ess_bulk"] > 400
+    assert diagnostics["converged"] is True
+    # And the posterior predictive check is computed from replicates, so its
+    # spread is comparable with the data rather than far tighter.
+    assert ppc["predicted_std"] == pytest.approx(ppc["observed_std"], rel=0.3)
+    assert 0.75 < ppc["ppc_interval_coverage"] <= 1.0

@@ -1,7 +1,7 @@
 {
-  "run_id": "60b13da8645a",
-  "timestamp": "2026-09-08T15:50:42.274539+00:00",
-  "git_commit": "3428788",
+  "run_id": "d1aefbf402e0",
+  "timestamp": "2026-09-09T06:08:59.970314+00:00",
+  "git_commit": "b7d0c09",
   "notice": "SYNTHETIC MARKETING SCIENCE DEMONSTRATION \u2014 simulated data with known ground-truth parameters. This is not Square Enix data, and no quantity here describes actual commercial performance.",
   "data_type": "synthetic",
   "is_square_enix_data": false,
@@ -83,28 +83,27 @@
     "expected_event_direction": "positive"
   },
   "sampler": {
-    "draws": 800,
-    "tune": 800,
-    "chains": 2,
-    "target_accept": 0.9,
+    "draws": 1000,
+    "tune": 1000,
+    "chains": 4,
+    "target_accept": 0.95,
     "seed": 20260101,
     "progressbar": false
   },
   "diagnostics_summary": {
-    "max_r_hat": 1.005418,
-    "min_ess_bulk": 521.896247,
-    "min_ess_tail": 449.848506,
-    "divergences": 9,
-    "converged": false,
-    "warnings": [
-      "9 divergent transitions: the sampler could not explore part of the posterior, so estimates may be biased."
-    ]
+    "max_r_hat": 1.003533,
+    "min_ess_bulk": 2524.565099,
+    "min_ess_tail": 1484.55046,
+    "divergences": 0,
+    "converged": true,
+    "warnings": []
   },
-  "recovery_checks_passed": 8,
+  "recovery_checks_passed": 7,
   "recovery_checks_total": 9,
   "identifiability_notes": [
     "Channel contributions are only partially identified. Channels whose spend moves together, or whose adstock and saturation shapes are similar, trade off against one another: the model can fit the data well while assigning credit between them differently from the truth.",
-    "Credible intervals on channel contribution are wide (widest: paid_search_spend, 49,778 to 294,919). Point estimates of contribution should never be quoted without them.",
+    "Credible intervals on channel contribution are wide (widest: video_spend, 31,185 to 102,620). Point estimates of contribution should never be quoted without them.",
+    "Total media contribution is under-attributed: 158,103 estimated against 236,171 true. Weekly spend is fairly stable, so each channel's saturated response is close to constant, and a constant is not separable from the baseline. Only the *variation* in media is identified from observational data like this; its average level is absorbed by the intercept. Widening the baseline prior does not recover it, which is what distinguishes a structural identifiability limit from a prior artefact. Separating the level needs spend variation the data does not contain, or an experiment such as a geo holdout.",
     "Recovering a parameter from simulated data shows the estimator works on this process. It is not evidence of causal media effectiveness, which observational marketing data cannot establish on its own."
   ]
 }

@@ -9,6 +9,7 @@ import pytest
 from src.ml.hierarchy import HierarchicalClassifier
 from src.ml.probabilities import (
     PROBABILITY_COLUMN,
+    SOURCE_EXCLUDED,
     PROVENANCE_COLUMN,
     SOURCE_OOF,
     SOURCE_PERSISTED,
@@ -170,3 +171,63 @@ class _StubModel(HierarchicalClassifier):
 
     def stage1_scores(self, texts):
         return np.full(len(list(texts)), self.value, dtype=float)
+
+
+def test_training_row_without_oof_is_excluded_not_scored_in_sample() -> None:
+    """The core provenance guarantee: no silent fallback to an in-sample score.
+
+    A row the model trained on, whose fold produced no out-of-fold value, must
+    be marked and dropped from the proxy. Scoring it with the persisted model
+    would use a model that had already seen it.
+    """
+    signals = pd.DataFrame({"id": ["a", "b", "c"], "text": ["seen a", "seen b", "unseen"]})
+
+    scored = attach_actionable_probabilities(
+        signals, _StubModel(0.42), {"a": 0.9}, training_ids={"a", "b"}
+    )
+
+    assert scored.loc[0, PROVENANCE_COLUMN] == SOURCE_OOF
+    assert scored.loc[1, PROVENANCE_COLUMN] == SOURCE_EXCLUDED
+    assert np.isnan(scored.loc[1, PROBABILITY_COLUMN])
+    assert scored.loc[2, PROVENANCE_COLUMN] == SOURCE_PERSISTED
+
+
+def test_training_rows_are_recognised_by_text_when_ids_were_stripped() -> None:
+    signals = pd.DataFrame({"text": ["  Seen   B ", "unseen row"]})
+
+    scored = attach_actionable_probabilities(
+        signals, _StubModel(0.42), {}, training_text_keys={"seen b"}
+    )
+
+    assert scored.loc[0, PROVENANCE_COLUMN] == SOURCE_EXCLUDED
+    assert np.isnan(scored.loc[0, PROBABILITY_COLUMN])
+    assert scored.loc[1, PROVENANCE_COLUMN] == SOURCE_PERSISTED
+
+
+def test_every_scored_row_carries_an_explicit_provenance_category() -> None:
+    signals = pd.DataFrame(
+        {"id": ["a", "b", "c", "d"], "text": ["seen a", "seen b", "unseen", "   "]}
+    )
+
+    scored = attach_actionable_probabilities(
+        signals, _StubModel(0.42), {"a": 0.9}, training_ids={"a", "b"}
+    )
+
+    known = {SOURCE_OOF, SOURCE_EXCLUDED, SOURCE_PERSISTED, SOURCE_UNAVAILABLE}
+    assert set(scored[PROVENANCE_COLUMN]) <= known
+    assert scored[PROVENANCE_COLUMN].notna().all()
+    # A row may only carry a probability if its provenance says where it came from.
+    scored_rows = scored[scored[PROBABILITY_COLUMN].notna()]
+    assert set(scored_rows[PROVENANCE_COLUMN]) <= {SOURCE_OOF, SOURCE_PERSISTED}
+
+
+def test_rows_marked_unavailable_or_excluded_never_carry_a_probability() -> None:
+    signals = pd.DataFrame({"id": ["a", "b"], "text": ["seen a", "  "]})
+
+    scored = attach_actionable_probabilities(
+        signals, _StubModel(0.42), {}, training_ids={"a"}
+    )
+
+    for source in (SOURCE_EXCLUDED, SOURCE_UNAVAILABLE):
+        subset = scored[scored[PROVENANCE_COLUMN] == source]
+        assert subset[PROBABILITY_COLUMN].isna().all()

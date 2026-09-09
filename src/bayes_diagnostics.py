@@ -62,27 +62,46 @@ def summarise_trace(trace, var_names: list[str] | None = None) -> dict:
     }
 
 
-def posterior_predictive_summary(observed, predictive_samples) -> dict:
-    """Compare observed data with posterior predictive draws."""
+def posterior_predictive_summary(
+    observed, predictive_samples, interval_level: float = 0.9
+) -> dict:
+    """Compare observed data with posterior predictive **replicates**.
+
+    ``predictive_samples`` must be draws of *new observations* — the linear
+    predictor pushed through the observation model, including its sampling
+    noise (and, for a hurdle model, its zero component). Passing draws of the
+    latent mean instead produces a far too narrow interval and a coverage
+    figure that looks like a badly calibrated model when the model is fine:
+    the mean of a series is estimated much more precisely than a single future
+    observation of it. ``predicted_std`` is therefore the spread of the
+    replicates themselves, which is comparable with ``observed_std``.
+
+    ``ppc_interval_coverage`` is the share of observations falling inside the
+    central ``interval_level`` predictive interval, so it should sit near
+    ``interval_level`` for a well-calibrated model. The nominal level is
+    returned alongside it so the number is interpretable on its own.
+    """
     import numpy as np
 
     observed_array = np.asarray(observed, dtype=float)
     samples = np.asarray(predictive_samples, dtype=float).reshape(-1, observed_array.size)
     if samples.size == 0:
         return {}
-    predicted_mean = samples.mean(axis=0)
-    lower = np.quantile(samples, 0.05, axis=0)
-    upper = np.quantile(samples, 0.95, axis=0)
+    tail = (1.0 - float(interval_level)) / 2.0
+    lower = np.quantile(samples, tail, axis=0)
+    upper = np.quantile(samples, 1.0 - tail, axis=0)
     return {
         "observed_mean": float(np.nanmean(observed_array)),
-        "predicted_mean": float(np.nanmean(predicted_mean)),
+        "predicted_mean": float(np.nanmean(samples)),
         "observed_std": float(np.nanstd(observed_array)),
-        "predicted_std": float(np.nanstd(predicted_mean)),
+        "predicted_std": float(np.nanstd(samples)),
+        "nominal_interval_level": float(interval_level),
         "ppc_interval_coverage": float(
             np.nanmean((observed_array >= lower) & (observed_array <= upper))
         ),
         "observed_zero_share": float(np.nanmean(observed_array <= 0)),
         "predicted_zero_share": float(np.nanmean(samples <= 0)),
+        "draws": int(samples.shape[0]),
     }
 
 
