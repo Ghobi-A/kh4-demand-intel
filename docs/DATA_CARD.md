@@ -41,6 +41,58 @@ is 60/140. Max/min imbalance ratio is 70:1.
 - **Language bias:** predominantly English; rules and models are not
   evaluated for other languages.
 
+## Timestamps
+
+Each signal carries the creation time supplied by the source API (YouTube
+`publishedAt`, Reddit `created_utc`), parsed to timezone-aware UTC in one place
+(`src/timestamps.py`). Scrape time is recorded separately and is never
+substituted for creation time.
+
+A missing timestamp stays missing. Two earlier defects are fixed: a Reddit
+comment with no `created_utc` used to default to 0 and become a real-looking
+1970 timestamp, and a YouTube comment with no `publishedAt` used to be dropped
+entirely, which biased volume counts downwards. Rows without a usable timestamp
+are excluded from weekly aggregation and counted in the output metadata rather
+than being placed in an arbitrary bucket.
+
+An optional, network-dependent enrichment path
+(`python -m src.enrich_timestamps`) re-fetches creation times for rows collected
+before this handling existed. It is never part of the normal pipeline or CI, and
+identifiers it cannot resolve are reported as unresolved rather than filled in.
+
+## Derived demand proxies
+
+The weekly table (`data/processed/weekly_demand_signals.csv`) aggregates scored
+signals into complete weekly periods. Its headline column,
+`actionable_probability_mass`, is the sum of calibrated P(actionable) over the
+comments observed in a period: an expected actionable-signal volume, **not**
+sales, revenue or units.
+
+Each row records `probability_source`:
+
+| Value | Meaning |
+|---|---|
+| `oof_supervised` | Out-of-fold, from a model trained without this row or its discussion group |
+| `persisted_supervised` | From the persisted trained model, for rows outside the labelled corpus |
+| `excluded_training_row` | In the corpus but no out-of-fold value; excluded from the proxy |
+| `unavailable` | No usable probability; contributes nothing |
+
+Rows are matched to the labelled corpus by record id, falling back to normalised
+text because the portfolio extract strips identifiers for privacy. The rule
+baseline's fixed 0.7/0.3 confidence indicator is never used as a probability.
+
+The committed weekly table under `data/demo/` is built from the class-stratified
+304-row portfolio extract. That extract samples up to 60 rows per intent class,
+so its weekly volumes are **not volume-representative** and it is stamped
+`sample_only = true`, `volume_representative = false`,
+`evaluation_status = demo_only`.
+
+## Synthetic marketing data
+
+`data/synthetic/` contains simulated marketing data with known ground-truth
+parameters and is **not Square Enix data**. It never mixes with the real signals
+above: see `docs/MMM_LAB.md`.
+
 ## Privacy
 
 The portfolio extract strips user-level metadata; usernames are not

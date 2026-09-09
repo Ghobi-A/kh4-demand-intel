@@ -35,6 +35,7 @@ import pandas as pd
 import requests
 
 from src.schema import SignalRecord
+from src.timestamps import serialise_timestamps
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,6 +58,23 @@ QUERIES = [
 REQUEST_DELAY_SECONDS = 1.0
 REQUEST_TIMEOUT_SECONDS = 30
 USER_AGENT = "kh4-demand-intel/0.1 (educational portfolio project)"
+
+
+def _created_utc_to_datetime(value) -> datetime | None:
+    """Convert a Reddit ``created_utc`` epoch to UTC, or None when unusable.
+
+    A missing ``created_utc`` used to default to 0, which silently produced a
+    1970 timestamp indistinguishable from real data. Missing stays missing.
+    """
+    if value is None:
+        return None
+    try:
+        epoch = float(value)
+    except (TypeError, ValueError):
+        return None
+    if epoch <= 0:
+        return None
+    return datetime.fromtimestamp(epoch, tz=timezone.utc)
 
 
 def fetch_pullpush(endpoint: str, params: dict) -> list[dict]:
@@ -116,14 +134,15 @@ def scrape_posts(limit_per_query: int) -> list[SignalRecord]:
                     id=post_id,
                     text=f"{title}\n\n{selftext}".strip(),
                     author=post.get("author"),
-                    timestamp=datetime.fromtimestamp(
-                        post.get("created_utc", 0), tz=timezone.utc
-                    ),
+                    timestamp=_created_utc_to_datetime(post.get("created_utc")),
                     engagement=int(post.get("score", 0) or 0),
                     permalink=full_permalink,
                     parent_id=None,
                     metadata={
                         "subreddit": sub_name,
+                        "timestamp_source": (
+                            "api_created" if post.get("created_utc") else "missing"
+                        ),
                         "title": title,
                         "num_comments": post.get("num_comments", 0),
                         "query": query,
@@ -132,7 +151,8 @@ def scrape_posts(limit_per_query: int) -> list[SignalRecord]:
 
             time.sleep(REQUEST_DELAY_SECONDS)
 
-    log.info(f"Collected {len(records)} unique posts")
+    missing = sum(1 for record in records if record.timestamp is None)
+    log.info(f"Collected {len(records)} unique posts ({missing} without a creation time)")
     return records
 
 
@@ -174,20 +194,25 @@ def scrape_comments(
                 id=comment_id,
                 text=body,
                 author=comment.get("author"),
-                timestamp=datetime.fromtimestamp(
-                    comment.get("created_utc", 0), tz=timezone.utc
-                ),
+                timestamp=_created_utc_to_datetime(comment.get("created_utc")),
                 engagement=int(comment.get("score", 0) or 0),
                 permalink=full_permalink,
                 parent_id=post.id,
                 metadata={
                     "subreddit": post.metadata.get("subreddit"),
+                    "timestamp_source": (
+                        "api_created" if comment.get("created_utc") else "missing"
+                    ),
                 },
             ))
 
         time.sleep(REQUEST_DELAY_SECONDS)
 
-    log.info(f"Collected {len(comment_records)} comments")
+    missing = sum(1 for record in comment_records if record.timestamp is None)
+    log.info(
+        f"Collected {len(comment_records)} comments "
+        f"({missing} without a creation time)"
+    )
     return comment_records
 
 
@@ -197,10 +222,10 @@ def save_records(records: list[SignalRecord], out_path: Path) -> None:
     rows = []
     for r in records:
         d = asdict(r)
-        d["timestamp"] = r.timestamp.isoformat()
         d["metadata"] = json.dumps(r.metadata)
         rows.append(d)
     df = pd.DataFrame(rows)
+    df["timestamp"] = serialise_timestamps(df["timestamp"])
     df["scraped_at"] = datetime.now(timezone.utc).isoformat()
     df.to_csv(out_path, index=False)
     log.info(f"Saved {len(df)} records to {out_path}")

@@ -1,0 +1,109 @@
+{
+  "run_id": "d1aefbf402e0",
+  "timestamp": "2026-09-09T06:08:59.970314+00:00",
+  "git_commit": "b7d0c09",
+  "notice": "SYNTHETIC MARKETING SCIENCE DEMONSTRATION \u2014 simulated data with known ground-truth parameters. This is not Square Enix data, and no quantity here describes actual commercial performance.",
+  "data_type": "synthetic",
+  "is_square_enix_data": false,
+  "generator_seed": 20260101,
+  "ground_truth": {
+    "notice": "SYNTHETIC MARKETING SCIENCE DEMONSTRATION \u2014 simulated data with known ground-truth parameters. This is not Square Enix data, and no quantity here describes actual commercial performance.",
+    "data_type": "synthetic",
+    "is_square_enix_data": false,
+    "statement": "This is not Square Enix data.",
+    "config": {
+      "seed": 20260101,
+      "n_weeks": 104,
+      "baseline_sales": 5000.0,
+      "trend_per_week": 6.0,
+      "seasonality_amplitude": 400.0,
+      "seasonality_period": 52.0,
+      "base_price": 59.99,
+      "price_volatility": 3.0,
+      "price_coefficient": -55.0,
+      "promotion_probability": 0.18,
+      "promotion_lift": 900.0,
+      "event_weeks": [
+        20,
+        58,
+        88
+      ],
+      "event_lift": 1500.0,
+      "event_duration": 2,
+      "noise_sd": 250.0,
+      "correlated_channels": false,
+      "correlation_strength": 0.85,
+      "channels": [
+        {
+          "name": "video_spend",
+          "base_spend": 22000.0,
+          "spend_volatility": 6000.0,
+          "adstock_decay": 0.6,
+          "saturation_alpha": 1.4,
+          "saturation_theta": 26000.0,
+          "beta": 2600.0
+        },
+        {
+          "name": "paid_search_spend",
+          "base_spend": 12000.0,
+          "spend_volatility": 3000.0,
+          "adstock_decay": 0.25,
+          "saturation_alpha": 1.1,
+          "saturation_theta": 11000.0,
+          "beta": 1500.0
+        },
+        {
+          "name": "social_spend",
+          "base_spend": 8000.0,
+          "spend_volatility": 2500.0,
+          "adstock_decay": 0.45,
+          "saturation_alpha": 1.2,
+          "saturation_theta": 9000.0,
+          "beta": 900.0
+        }
+      ]
+    },
+    "true_contributions": {
+      "video_spend": 112782.41072956033,
+      "paid_search_spend": 80020.65794699192,
+      "social_spend": 43368.31551640578
+    },
+    "true_contribution_share": {
+      "video_spend": 0.13771182022190684,
+      "paid_search_spend": 0.09770841383820995,
+      "social_spend": 0.05295444237349375
+    },
+    "true_contribution_ranking": [
+      "video_spend",
+      "paid_search_spend",
+      "social_spend"
+    ],
+    "expected_price_direction": "negative",
+    "expected_promotion_direction": "positive",
+    "expected_event_direction": "positive"
+  },
+  "sampler": {
+    "draws": 1000,
+    "tune": 1000,
+    "chains": 4,
+    "target_accept": 0.95,
+    "seed": 20260101,
+    "progressbar": false
+  },
+  "diagnostics_summary": {
+    "max_r_hat": 1.003533,
+    "min_ess_bulk": 2524.565099,
+    "min_ess_tail": 1484.55046,
+    "divergences": 0,
+    "converged": true,
+    "warnings": []
+  },
+  "recovery_checks_passed": 7,
+  "recovery_checks_total": 9,
+  "identifiability_notes": [
+    "Channel contributions are only partially identified. Channels whose spend moves together, or whose adstock and saturation shapes are similar, trade off against one another: the model can fit the data well while assigning credit between them differently from the truth.",
+    "Credible intervals on channel contribution are wide (widest: video_spend, 31,185 to 102,620). Point estimates of contribution should never be quoted without them.",
+    "Total media contribution is under-attributed: 158,103 estimated against 236,171 true. Weekly spend is fairly stable, so each channel's saturated response is close to constant, and a constant is not separable from the baseline. Only the *variation* in media is identified from observational data like this; its average level is absorbed by the intercept. Widening the baseline prior does not recover it, which is what distinguishes a structural identifiability limit from a prior artefact. Separating the level needs spend variation the data does not contain, or an experiment such as a geo holdout.",
+    "Recovering a parameter from simulated data shows the estimator works on this process. It is not evidence of causal media effectiveness, which observational marketing data cannot establish on its own."
+  ]
+}

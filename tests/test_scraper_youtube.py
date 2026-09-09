@@ -101,6 +101,7 @@ def test_fetch_youtube_comments_maps_to_signal_record(
         "video_id": "video123",
         "author_display_name": "SoraFan",
         "reply_count": 2,
+        "timestamp_source": "api_created",
     }
     assert records[1].id == "comment_2"
     assert records[1].metadata["reply_count"] == 0
@@ -383,3 +384,52 @@ def test_fetch_video_metadata_returns_api_title_and_channel(
         "api_title": "Real Title",
         "api_channel": "Real Channel",
     }
+
+
+def test_comment_without_published_at_is_kept_with_a_missing_timestamp(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """A comment with no creation time is still real signal.
+
+    Dropping it would bias volume counts downwards; fabricating a time would
+    corrupt every weekly bucket. It is kept with a missing timestamp.
+    """
+    monkeypatch.setenv("YOUTUBE_API_KEY", "test-key")
+
+    def mock_page_fetch(video_id, api_key, max_results, page_token=None):
+        return {
+            "items": [
+                {
+                    "snippet": {
+                        "totalReplyCount": 0,
+                        "topLevelComment": {
+                            "id": "no_time",
+                            "snippet": {
+                                "textDisplay": "still real signal",
+                                "authorDisplayName": "Fan",
+                                "likeCount": 1,
+                            },
+                        },
+                    }
+                }
+            ]
+        }
+
+    monkeypatch.setattr(scraper_youtube, "_fetch_comment_threads_page", mock_page_fetch)
+
+    records = scraper_youtube.fetch_youtube_comments(
+        video_id="vid1", max_results=1, output_dir=tmp_path
+    )
+
+    assert len(records) == 1
+    assert records[0].timestamp is None
+    assert records[0].metadata["timestamp_source"] == "missing"
+
+    saved = pd.read_csv(tmp_path / "youtube_comments_vid1.csv")
+    assert pd.isna(saved.loc[0, "timestamp"])
+
+
+def test_unparseable_published_at_is_not_fabricated(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert scraper_youtube._parse_iso8601("not-a-timestamp") is None
+    assert scraper_youtube._parse_iso8601(None) is None
+    assert scraper_youtube._parse_iso8601("2026-01-01T00:00:00Z") is not None

@@ -1,0 +1,10 @@
+check,passed,estimated,expected,detail
+price_direction,True,-49.12,negative,Sales should fall as price rises.
+promotion_direction,True,750.49,positive,A promotion should lift sales.
+event_direction,True,1337.88,positive,An event week should lift sales.
+media_effects_non_negative,True,"[1250.4, 1431.0, 821.0]",>= 0,Spending on a channel should not be estimated to reduce sales.
+contribution_ranking,True,0.5,>= 0.5 rank correlation,Broad ordering of channel contributions should be recovered.
+largest_channel_identified,False,paid_search_spend,video_spend,The largest contributing channel should be identified.
+true_contribution_in_interval,False,2/3,3/3,The true contribution should fall inside the 90% credible interval.
+diminishing_returns,True,"monotone=True, marginal return falls=True",monotone with falling marginal return,Response should rise with spend while its marginal return falls as spend grows (saturation).
+adstock_decay_in_interval,True,2/3,majority,Carryover decay should be recovered for most channels.

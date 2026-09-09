@@ -31,7 +31,9 @@ class SignalRecord:
         id: Unique ID within the source platform.
         text: The actual content for sentiment/topic analysis.
         author: Username if available; None for anonymous or deleted.
-        timestamp: When the content was created (UTC).
+        timestamp: When the content was CREATED at the source (UTC, tz-aware).
+            None when the source supplied no usable creation time. The scrape
+            time is recorded separately and must never be substituted here.
         engagement: Score/upvotes/likes — interpretation varies by source.
         permalink: Direct URL to the content.
         parent_id: ID of parent post for comments; None for top-level.
@@ -42,7 +44,7 @@ class SignalRecord:
     id: str
     text: str
     author: str | None
-    timestamp: datetime
+    timestamp: datetime | None
     engagement: int
     permalink: str
     parent_id: str | None

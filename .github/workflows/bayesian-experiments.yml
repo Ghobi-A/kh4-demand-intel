@@ -1,0 +1,64 @@
+name: Bayesian experiments (manual)
+
+# Full posterior sampling is too slow to run on every pull request, so it runs
+# on demand. The forecasting job uses the demo sample because the full KH4
+# dataset is local and git-ignored; its outputs are stamped demo_only and are
+# not substantive results.
+
+on:
+  workflow_dispatch:
+    inputs:
+      draws:
+        description: "Posterior draws per chain"
+        default: "1000"
+      tune:
+        description: "Tuning steps per chain"
+        default: "1000"
+      chains:
+        description: "Number of chains"
+        default: "4"
+
+jobs:
+  full-bayesian:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[ml,dev,forecast]
+
+      - name: Build the demo temporal dataset
+        run: python scripts/build_temporal_dataset.py --demo
+
+      - name: Full Bayesian forecasting run (demo sample)
+        run: |
+          python scripts/run_forecasting.py --demo \
+            --draws ${{ inputs.draws }} \
+            --tune ${{ inputs.tune }} \
+            --chains ${{ inputs.chains }} \
+            --save-posterior
+
+      - name: Full synthetic MMM run
+        run: |
+          python scripts/run_mmm.py \
+            --draws ${{ inputs.draws }} \
+            --tune ${{ inputs.tune }} \
+            --chains ${{ inputs.chains }} \
+            --save-posterior
+
+      - name: Upload generated reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: bayesian-reports
+          path: |
+            reports/demo_forecasting/
+            reports/mmm/
+          retention-days: 14

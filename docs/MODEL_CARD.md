@@ -49,6 +49,21 @@ score and ECE are reported per run. Uncalibrated SVM margins are always
 labelled as scores, never probabilities. With ~30 validation rows,
 calibration quality is itself preliminary.
 
+## Downstream use in forecasting
+
+The calibrated Stage 1 probabilities feed the weekly behavioural demand proxy
+(`actionable_probability_mass`). For rows inside the labelled corpus those
+probabilities are computed **out-of-fold** with group-aware folds, so no row is
+scored by a model that saw its own discussion group; other rows use the
+persisted model. Provenance is recorded per row.
+
+Forecasting models built on that proxy are documented separately in
+`docs/FORECASTING.md`. They forecast observable discussion behaviour, never
+sales: Kingdom Hearts IV is unreleased and no purchase conversion exists.
+
+A separate synthetic Bayesian marketing mix model (`docs/MMM_LAB.md`) is fitted
+only to simulated data and shares no inputs with this classifier.
+
 ## Bias, drift, and limitations
 
 - Inherits the platform/selection/topic biases in the data card;

@@ -30,6 +30,7 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from src.schema import SignalRecord
+from src.timestamps import serialise_timestamps
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,9 +54,23 @@ STATUS_SKIPPED = "skipped_existing"
 STATUS_FAILED = "failed"
 
 
-def _parse_iso8601(timestamp: str) -> datetime:
-    """Parse YouTube API timestamps into timezone-aware datetimes."""
-    return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+def _parse_iso8601(timestamp: str | None) -> datetime | None:
+    """Parse a YouTube API creation time, or return None when unusable.
+
+    A comment without ``publishedAt`` is still real signal, so it is kept with
+    a missing timestamp rather than dropped — dropping it would bias volume
+    counts, and fabricating one would corrupt every weekly bucket.
+    """
+    if not timestamp:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+    except ValueError:
+        log.warning("Unparseable publishedAt value: %r", timestamp)
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _fetch_comment_threads_page(
@@ -86,11 +101,12 @@ def _save_records(records: list[SignalRecord], out_path: Path) -> None:
     rows = []
     for record in records:
         payload = asdict(record)
-        payload["timestamp"] = record.timestamp.isoformat()
         payload["metadata"] = json.dumps(record.metadata)
         rows.append(payload)
 
     df = pd.DataFrame(rows)
+    if not df.empty:
+        df["timestamp"] = serialise_timestamps(df["timestamp"])
     df["scraped_at"] = datetime.now(timezone.utc).isoformat()
     df.to_csv(out_path, index=False)
 
@@ -138,8 +154,10 @@ def fetch_youtube_comments(
             comment_snippet = comment.get("snippet", {})
             comment_id = comment.get("id")
 
-            if not comment_id or "publishedAt" not in comment_snippet:
+            if not comment_id:
                 continue
+
+            published_at = comment_snippet.get("publishedAt")
 
             records.append(
                 SignalRecord(
@@ -148,7 +166,7 @@ def fetch_youtube_comments(
                     id=comment_id,
                     text=comment_snippet.get("textDisplay", ""),
                     author=comment_snippet.get("authorDisplayName"),
-                    timestamp=_parse_iso8601(comment_snippet["publishedAt"]),
+                    timestamp=_parse_iso8601(published_at),
                     engagement=int(comment_snippet.get("likeCount", 0)),
                     permalink=(
                         f"https://www.youtube.com/watch?v={video_id}&lc={comment_id}"
@@ -162,6 +180,9 @@ def fetch_youtube_comments(
                         "reply_count": item.get("snippet", {}).get(
                             "totalReplyCount", 0
                         ),
+                        "timestamp_source": (
+                            "api_created" if published_at else "missing"
+                        ),
                     },
                 )
             )
@@ -173,9 +194,10 @@ def fetch_youtube_comments(
         if not next_page_token:
             break
 
+    missing_timestamps = sum(1 for record in records if record.timestamp is None)
     log.info(
         f"Fetched {len(records)} comments across {pages_fetched} page(s) "
-        f"from video {video_id}"
+        f"from video {video_id} ({missing_timestamps} without a creation time)"
     )
     resolved_output_dir = Path(output_dir) if output_dir else None
     output_path = _build_output_path(video_id, resolved_output_dir)

@@ -1,0 +1,76 @@
+{
+  "notice": "SYNTHETIC MARKETING SCIENCE DEMONSTRATION \u2014 simulated data with known ground-truth parameters. This is not Square Enix data, and no quantity here describes actual commercial performance.",
+  "data_type": "synthetic",
+  "is_square_enix_data": false,
+  "statement": "This is not Square Enix data.",
+  "config": {
+    "seed": 20260101,
+    "n_weeks": 104,
+    "baseline_sales": 5000.0,
+    "trend_per_week": 6.0,
+    "seasonality_amplitude": 400.0,
+    "seasonality_period": 52.0,
+    "base_price": 59.99,
+    "price_volatility": 3.0,
+    "price_coefficient": -55.0,
+    "promotion_probability": 0.18,
+    "promotion_lift": 900.0,
+    "event_weeks": [
+      20,
+      58,
+      88
+    ],
+    "event_lift": 1500.0,
+    "event_duration": 2,
+    "noise_sd": 250.0,
+    "correlated_channels": false,
+    "correlation_strength": 0.85,
+    "channels": [
+      {
+        "name": "video_spend",
+        "base_spend": 22000.0,
+        "spend_volatility": 6000.0,
+        "adstock_decay": 0.6,
+        "saturation_alpha": 1.4,
+        "saturation_theta": 26000.0,
+        "beta": 2600.0
+      },
+      {
+        "name": "paid_search_spend",
+        "base_spend": 12000.0,
+        "spend_volatility": 3000.0,
+        "adstock_decay": 0.25,
+        "saturation_alpha": 1.1,
+        "saturation_theta": 11000.0,
+        "beta": 1500.0
+      },
+      {
+        "name": "social_spend",
+        "base_spend": 8000.0,
+        "spend_volatility": 2500.0,
+        "adstock_decay": 0.45,
+        "saturation_alpha": 1.2,
+        "saturation_theta": 9000.0,
+        "beta": 900.0
+      }
+    ]
+  },
+  "true_contributions": {
+    "video_spend": 112782.41072956033,
+    "paid_search_spend": 80020.65794699192,
+    "social_spend": 43368.31551640578
+  },
+  "true_contribution_share": {
+    "video_spend": 0.13771182022190684,
+    "paid_search_spend": 0.09770841383820995,
+    "social_spend": 0.05295444237349375
+  },
+  "true_contribution_ranking": [
+    "video_spend",
+    "paid_search_spend",
+    "social_spend"
+  ],
+  "expected_price_direction": "negative",
+  "expected_promotion_direction": "positive",
+  "expected_event_direction": "positive"
+}

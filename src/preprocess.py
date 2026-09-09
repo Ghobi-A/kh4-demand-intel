@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.timestamps import parse_timestamps, timestamp_status
+
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_INPUT_DIR = Path("data/raw")
@@ -110,7 +112,17 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     cleaned = cleaned.loc[keep_mask].copy()
 
     cleaned["text"] = cleaned["text"].fillna("").astype(str).map(_normalize_text)
-    cleaned["timestamp"] = pd.to_datetime(cleaned["timestamp"], utc=True, errors="coerce")
+
+    raw_timestamps = cleaned["timestamp"].reset_index(drop=True)
+    parsed, report = parse_timestamps(raw_timestamps)
+    report.log("preprocess timestamps")
+    # Reindex rather than assigning ``.values``: a raw ndarray assignment drops
+    # the UTC timezone and turns every downstream comparison naive.
+    parsed.index = cleaned.index
+    status = timestamp_status(parsed.reset_index(drop=True), raw_timestamps)
+    status.index = cleaned.index
+    cleaned["timestamp"] = parsed
+    cleaned["timestamp_status"] = status
 
     return cleaned
 
