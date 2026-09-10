@@ -34,7 +34,7 @@ TARGET_KINDS = {
     "actionable_rate": "rate",
 }
 
-DEFAULT_TARGETS = ("actionable_probability_mass", "total_comments")
+DEFAULT_TARGETS = ("actionable_probability_mass", "actionable_count", "total_comments")
 
 EVENT_FEATURE_COLUMNS = ["event_active", "event_decay", "major_announcement_flag"]
 

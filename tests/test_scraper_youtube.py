@@ -230,6 +230,7 @@ def test_batch_fetches_every_seed_video(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert (tmp_path / "youtube_comments_vid2.csv").exists()
     assert manifest["status"].tolist() == ["ok", "ok"]
     assert manifest["rows_fetched"].tolist() == [2, 3]
+    assert manifest["max_results"].tolist() == [10, 10]
     assert manifest["seed_title"].tolist() == ["First", "Second"]
 
 
@@ -318,6 +319,7 @@ def test_batch_writes_manifest_that_is_not_signal_data(
         "seed_channel",
         "status",
         "rows_fetched",
+        "max_results",
         "output_path",
         "fetched_at",
         "error",

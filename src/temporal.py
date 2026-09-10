@@ -67,6 +67,7 @@ ACTIONABLE_INTENTS = {
 
 EVALUATION_STATUS_DEMO = "demo_only"
 EVALUATION_STATUS_FULL = "full_dataset"
+EVALUATION_STATUS_SEED_CAPPED = "seed_capped_dataset"
 
 DEMO_BANNER = (
     "Generated from the class-stratified 304-row portfolio extract. This is a "
@@ -90,6 +91,48 @@ def dataframe_hash(df: pd.DataFrame) -> str:
     """Deterministic content hash for provenance metadata."""
     payload = pd.util.hash_pandas_object(df.astype(str), index=False).values.tobytes()
     return hashlib.sha256(payload).hexdigest()[:16]
+
+
+def _youtube_collection_meta(
+    manifest_path: Path = Path("reports/tables/youtube_fetch_manifest.csv"),
+) -> dict:
+    """Summarise YouTube collection provenance when a fetch manifest exists.
+
+    A seed-list scrape can be a real observed dataset without being volume
+    representative. If any fetched video hits the requested ``max_results``
+    cap, the weekly comment volumes are right-censored by collection design.
+    """
+    if not manifest_path.exists():
+        return {"manifest_path": str(manifest_path), "manifest_found": False}
+
+    manifest = pd.read_csv(manifest_path)
+    meta = {
+        "manifest_path": str(manifest_path),
+        "manifest_found": True,
+        "videos": int(len(manifest)),
+        "rows_fetched": int(manifest.get("rows_fetched", pd.Series(dtype=int)).fillna(0).sum()),
+        "failed_videos": int((manifest.get("status", pd.Series(dtype=str)) == "failed").sum()),
+    }
+    if {"rows_fetched", "max_results"}.issubset(manifest.columns):
+        fetched = pd.to_numeric(manifest["rows_fetched"], errors="coerce").fillna(0)
+        caps = pd.to_numeric(manifest["max_results"], errors="coerce")
+        capped = caps.notna() & (fetched >= caps)
+        meta["max_results_per_video"] = int(caps.dropna().max()) if caps.notna().any() else None
+        meta["cap_hit_videos"] = int(capped.sum())
+        meta["seed_capped"] = bool(capped.any())
+    else:
+        meta["seed_capped"] = None
+
+    return meta
+
+
+def _should_use_youtube_manifest(input_path: Path) -> bool:
+    """Avoid letting a repo-local manifest contaminate external/tmp datasets."""
+    try:
+        input_path.resolve().relative_to(Path.cwd().resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def aggregate_weekly(
@@ -252,14 +295,29 @@ def build_temporal_dataset(
 
     coverage = audit_temporal_coverage(signals, freq=freq, events=events)
 
+    youtube_collection = (
+        _youtube_collection_meta()
+        if _should_use_youtube_manifest(input_path)
+        else {"manifest_found": False}
+    )
+    seed_capped = youtube_collection.get("seed_capped") is True
+    volume_representative = bool(not demo and not seed_capped)
+
     meta = {
         "source_dataset": str(input_path),
         "source_dataset_hash": source_hash,
         "output": str(output_path),
         "generated_freq": freq,
         "sample_only": bool(demo),
-        "volume_representative": not demo,
-        "evaluation_status": EVALUATION_STATUS_DEMO if demo else EVALUATION_STATUS_FULL,
+        "volume_representative": volume_representative,
+        "evaluation_status": (
+            EVALUATION_STATUS_DEMO
+            if demo
+            else EVALUATION_STATUS_SEED_CAPPED
+            if seed_capped
+            else EVALUATION_STATUS_FULL
+        ),
+        "youtube_collection": youtube_collection,
         "primary_target": "actionable_probability_mass",
         "primary_target_available": bool(
             primary_target_available and "actionable_probability_mass" in weekly.columns
