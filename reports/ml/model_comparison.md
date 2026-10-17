@@ -2,8 +2,8 @@
 
 > **Preliminary development benchmark.** These numbers come from the current 200-row audit corpus, which is still being re-audited and expanded. They are not final held-out performance and must not be quoted as production or CV headline metrics.
 
-- Run: `f1921ed69f29` at 2026-07-18T17:38:39.543911+00:00
-- Git commit: `886e6f6`
+- Run: `5fe6da075b1f` at 2026-10-17T00:16:23.072831+00:00
+- Git commit: `ca7fca9`
 - Dataset hash: `450745418479c703` (200 rows, annotation `audit_v1_2025`)
 - Seeds: [42, 43, 44, 45, 46] (seed scope: split_and_initialisation)
 - Evaluation mode: `group_holdout`
