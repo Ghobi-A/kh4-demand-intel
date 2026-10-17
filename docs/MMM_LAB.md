@@ -98,15 +98,16 @@ sampler settings, and it was fixed structurally rather than by raising
 - **Priors are expressed in units of the observed spread**, so none is
   accidentally strong or vacuous.
 
-The committed run now samples with zero divergences at the ordinary
-`target_accept` of 0.9.
+The committed run samples with zero divergences (4 chains, `target_accept` 0.95,
+the `run_mmm.py` default; max R-hat about 1.005).
 
 ## Recovery against known truth
 
 `reports/mmm/recovery.csv` scores each check. On the committed run the model:
 
 - recovers the **direction and rough magnitude** of the price, promotion and event effects;
-- keeps the **true contribution inside the 90% credible interval** for every channel;
+- keeps the **true contribution inside the 90% credible interval** for two of three
+  channels (video's true contribution lies above its interval);
 - shows **diminishing returns** in every response curve;
 - recovers **adstock decay** for most channels;
 - but **swaps the top two channels** by contribution, and **under-attributes
@@ -131,12 +132,22 @@ should never be quoted without them.
 
 ## Scenario simulator
 
-Change per-channel budgets, price, promotion or event status, and the plan is
+Reallocate budget between channels (budget-neutral: each week a fraction of the
+source channel's spend moves to the target, so total spend is unchanged), scale a
+channel's spend with a multiplier (which does change total spend), or change
+price, promotion or event status. The plan is
 pushed back through the model's own adstock and saturation curves. Because
 saturation is non-linear, moving budget between channels does not move simulated
 sales proportionally, which is the point of asking. Output includes the baseline
 and scenario expectation, the difference with a credible interval, the
 probability of an increase, and per-channel contribution changes.
+
+An earlier version built "move 20% of social into video" as 0.8x social and 1.2x
+video multipliers. Video's budget is almost three times social's, so that plan
+added about 267k of spend, and its "96% probability of an increase" mostly
+measured the extra money. As a genuine reallocation the committed scenario changes
+simulated sales by −593 (90% interval −5,733 to +3,592), which is no detectable effect.
+Every scenario now reports its total spend change.
 
 A plan that pushes spend or price beyond the range in the training data raises a
 warning: the saturation curve is unconstrained out there, so the answer is

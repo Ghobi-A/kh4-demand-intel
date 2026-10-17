@@ -25,7 +25,7 @@ discussion.**
 ## Technical highlights
 
 - Supervised behavioural-intent NLP over public Reddit and YouTube discussion
-- Calibrated actionable-signal probabilities with group-aware, out-of-fold provenance
+- Calibrated actionable-signal probabilities (validation-only Platt scaling) with group-aware, out-of-fold provenance
 - Real timestamp recovery and reproducible weekly temporal aggregation
 - Rolling-origin (walk-forward) demand forecasting with explicit leakage tests
 - Bayesian forecasting in PyMC, with the likelihood chosen to fit the target
@@ -57,43 +57,64 @@ Five things are kept strictly apart, in code and in every report:
 unreleased. No Square Enix sales, budgets, ROAS, pricing decisions or campaign
 data appear anywhere in this project, and none are inferred.
 
+## Status at a glance
+
+| Component | Data | Status |
+|---|---|---|
+| Intent NLP | 200 human-labelled public comments, 23 discussion groups, 1 annotator | Development / preliminary |
+| Forecasting | 304-row class-stratified **demo sample** | Demo smoke run; full-data run blocked on missing input |
+| Marketing mix model | **Synthetic** simulated data with known ground truth | Method demonstration only |
+
+The evidence, its severity-ranked defects and what is blocked are in
+[`docs/PORTFOLIO_READINESS_AUDIT.md`](docs/PORTFOLIO_READINESS_AUDIT.md).
+
 ## What the evaluation actually found
 
-The headline result is negative, and it is the point rather than an
-embarrassment.
+Ordered from most to least defensible. All numbers regenerate from the files cited.
 
-**A naive last-value forecast beats the Bayesian model.** On matched forecast
-origins the naive baseline reaches a WAPE of about 0.82 against roughly 0.94 for
-the hurdle-Gamma model. That ordering is preserved: no model here was tuned to
-reverse it.
+**1. Sentiment is not behavioural intent.** In the human-labelled corpus, 98 of 134
+VADER-positive comments (73%) are non-actionable discussion, while 16 of 41 negative
+comments (39%) carry an actionable signal such as frustrated demand or a confusion
+barrier. (200 rows sampled around rule behaviour; one annotator.)
 
-**Better convergence did not change that.** The Bayesian model was reparameterised
-during a validation pass (centred time, unidentified event features dropped) and
-now samples cleanly: zero divergences, R-hat about 1.004, bulk ESS in the
-thousands. It still loses. The earlier marginal convergence was not the reason a
-sophisticated model was losing to a one-line one.
+**2. Actionable-signal ranking beats random review, with wide uncertainty.** Under
+group-aware 5-fold cross-validation (every row scored by a model that never saw its
+discussion group; calibration and threshold fitted on inner validation folds), the
+word+char SVM reaches Stage 1 PR-AUC 0.65 (group-bootstrap 95%: 0.55–0.77) against a
+base rate of 0.30, and Lift@10% 2.5 (2.1–3.3). Intent-level results are weak:
+`high_intent` F1 is 0 out of fold, and two classes have no labels at all
+(`reports/ml/group_cv_report.md`).
 
-**Why naive wins here.** The weekly proxy is sparse and spiky: about 64% of weeks
-contain no actionable discussion at all, and activity arrives in short bursts
-around events. There is no seasonal signal to exploit, the trend is weak, and the
-events in the calendar post-date the observed window, so their coefficients are
-not identifiable and are excluded. A model whose structure encodes trend and
-seasonality has nothing to work with, while "tomorrow looks like today" is hard to
-beat on a series dominated by zeros.
+**3. No forecasting model is reliable on this history, and a model ranking based on six
+forecasts says almost nothing.** On the demo sample, the naive last-value forecast has
+the lowest matched-origin WAPE (0.82 against 0.93 for the hurdle-Gamma Bayesian model).
+That comparison is **6 forecasts over 3 origins**, and the sensitivity analysis shows one
+origin produces the whole gap: leave it out and the two tie (0.961 vs 0.959). Over all 99
+origins, every baseline's WAPE is about 1.0. The value here is the model-selection
+discipline: no model was tuned to reverse the ordering, the Bayesian model is not
+promoted for being evaluated less, and the report declines to recommend any model
+(`reports/demo_forecasting/matched_origin_sensitivity.json`).
 
-**No model here is reliable.** Every model with enough forecasts to judge shows
-persistent directional bias, so the report names the lowest-error option without
-recommending it. The posterior predictive check adds a second honest failure: the
-model reproduces the share of empty weeks almost exactly, but its replicates are
-less variable than the data, so it understates how large the busiest weeks get.
+The Bayesian model converges cleanly (R-hat about 1.005, zero divergences, bulk ESS in the
+thousands), so its loss is not a sampling failure. Its posterior predictive check
+reproduces the share of empty weeks but only about half the observed variability, so it
+understates spikes. The weekly proxy is sparse (about 64% empty weeks in the sample) with
+no seasonal signal, and the event calendar post-dates the observed window, so event
+effects are not identifiable.
 
-**What would change with real commercial data.** The limiting factor is the
-target, not the method. With first-party data (units sold, wishlist additions,
-pre-orders, store traffic) the same pipeline would forecast a quantity that
-actually has a level and a trend, events could be evaluated against outcomes
-rather than discussion, and the marketing mix model could be fitted to observed
-spend instead of a simulation. Nothing about the validation design would need to
-change; it is built to make a weak result visible rather than to hide one.
+**4. The synthetic MMM demonstrates identifiability limits, not marketing ROI.** Against
+known ground truth it recovers the price, promotion and event directions, diminishing
+returns and most adstock decays (7/9 checks), but swaps the top two channels, leaves one
+of three true contributions outside its 90% interval, and under-attributes total media
+contribution (about 159k against 236k true). A budget-neutral move of 20% of social spend
+into video changes simulated sales by −593 (90% interval −5,733 to +3,592): no
+detectable effect (`reports/mmm/mmm_report.md`).
+
+**What would change with real commercial data.** The limiting factor is the target, not
+the method. With first-party data (units sold, wishlist additions, pre-orders) the same
+pipeline would forecast a quantity with a level and a trend, events could be evaluated
+against outcomes, and the MMM could be fitted to observed spend. The validation design
+would not need to change: it is built to make a weak result visible.
 
 ## 1. Problem
 
@@ -215,6 +236,15 @@ Full rationale: `docs/EXPERIMENT_DESIGN.md`.
 
 ## 8. Preliminary results
 
+Two complementary views, both `development_preliminary`:
+
+- **Group-aware cross-validation** (`python -m src.ml.group_cv` →
+  `reports/ml/group_cv_report.md`): every row gets an out-of-fold prediction,
+  so per-class support is the full corpus count, with group-bootstrap
+  intervals, calibration bins with Wilson intervals, per-group stability and
+  error slices (source, sampling strategy, length, rule agreement).
+- **Repeated group holdout** (`python -m src.ml.benchmark`), below.
+
 > **Preliminary development benchmark** — 200 rows, 23 groups, 5 seeds.
 > Generated tables: `reports/ml/results_summary.csv`,
 > `reports/ml/model_comparison.md`. Numbers are not hardcoded here
@@ -250,7 +280,10 @@ pip install -e .[ml,app]
 streamlit run app.py
 ```
 
-Tabs: **Demand Intelligence** (original dashboard, unchanged), **Model
+Tabs: **Overview** (status, data provenance, the most defensible findings with
+their uncertainty, blocked work and links to evidence, all read from generated
+artefacts), **Demand Intelligence** (the 304-row class-stratified extract, with
+a banner saying so), **Model
 Performance**, **Model Comparison**, **Error Analysis**, **Drift**,
 **Events**, **Forecasting**, **Forecast Monitoring**, **Marketing Science
 Lab**, **Scenario Planner**, and **Live Inference**. The app shows the
@@ -322,9 +355,11 @@ recovers the process that generated the data.
 Geometric adstock, Hill saturation, a Bayesian MMM in PyMC, posterior channel
 contributions with credible intervals, price and promotion effects, and a
 budget-reallocation scenario simulator. On the committed run the model recovers
-the price, promotion and event directions and keeps every true contribution
-inside its credible interval, but **swaps the top two channels** — a genuine
-identifiability limitation that is reported rather than tuned away.
+the price, promotion and event directions, but **swaps the top two channels**,
+leaves one of three true contributions outside its 90% interval, and
+under-attributes total media contribution — genuine identifiability limitations
+that are reported rather than tuned away. Reallocation scenarios are
+budget-neutral (spend moves between channels; the total is unchanged).
 
 Synthetic data lives only in `data/synthetic/` and `reports/mmm/`, every row
 carries `data_type = synthetic`, and the fitter refuses non-synthetic input.
@@ -368,10 +403,21 @@ python scripts/run_forecasting.py --save-posterior
 python scripts/run_mmm.py --save-posterior
 ```
 
+Before a full run, check what is missing (exits 2 and lists exact commands
+when the canonical data is absent; nothing is substituted):
+
+```bash
+python scripts/check_full_data_readiness.py
+```
+
 The committed results under `reports/demo_forecasting/` come from the
 class-stratified 304-row portfolio extract, which is **not volume-representative**.
 They are stamped `sample_only = true`, `volume_representative = false` and
-`evaluation_status = demo_only`, and exist only to show the pipeline runs.
+`evaluation_status = demo_only`, and exist only to show the pipeline runs. A
+committed demo extract passed without `--demo` is refused (matched by path and
+content hash), so it can never be stamped as the full dataset. Every run also
+writes `matched_origin_sensitivity.json` (per-origin and leave-one-origin-out
+WAPE) so a ranking decided by one origin is visible.
 `reports/forecasting/` is reserved for a run over the full canonical dataset.
 
 Optional, network-dependent: recover creation timestamps for rows collected
@@ -423,6 +469,8 @@ python scripts/run_pipeline.py    # preprocess → sentiment → intent → scor
 pip install -e .[ml,dev]
 
 python -m src.ml.data validate                 # data-quality report
+python -m src.ml.dataset_audit                 # support, near-duplicates, annotation revision
+python -m src.ml.group_cv                      # group-aware CV with bootstrap CIs
 python -m src.ml.benchmark \
   --models majority rules logistic linear_svm char_word_svm \
   --seeds 42 43 44 45 46                       # full benchmark
@@ -430,6 +478,7 @@ python -m src.ml.train --model logistic        # persist artefacts
 python -m src.ml.error_analysis                # error reports
 python -m src.ml.drift                         # distribution-shift report
 python -m src.ml.active_learning               # re-audit queue
+python -m src.ml.annotation_queue build        # stratified, blind expansion queue
 pytest                                         # full test suite
 ```
 
@@ -442,7 +491,9 @@ seeds, split/group counts, frozen threshold, and
 
 - 200 labelled rows across 23 discussion groups: split variance
   dominates; all supervised results are preliminary.
-- Two taxonomy classes have no labelled examples.
+- Two taxonomy classes have no labelled examples; three more have fewer than ten.
+- One annotator. First-pass and final labels agree on 57% of rows (κ 0.30),
+  a revision rate rather than inter-annotator agreement, which is unmeasured.
 - 197/200 labelled rows are YouTube; Reddit performance is unmeasured.
 - Labels were sampled around rule-classifier behaviour (selection bias).
 - `demand_score` is a heuristic decision-support signal, not a forecast.
@@ -454,7 +505,8 @@ seeds, split/group counts, frozen threshold, and
 - Forecast uncertainty grows with horizon; long-range forecasts on this history
   are weak.
 - The committed forecasting results are a demo smoke run over a stratified
-  sample and are not volume-representative.
+  sample and are not volume-representative; the matched-origin model ranking
+  rests on 6 forecasts and is decided by a single origin.
 - The marketing mix model is fitted to synthetic data; its channel
   contributions are only partially identified even there.
 - See `docs/MODEL_CARD.md` and `docs/DATA_CARD.md`.
@@ -463,7 +515,10 @@ seeds, split/group counts, frozen threshold, and
 
 1. Re-audit existing labels via `reports/annotation/review_queue.csv`
    using `docs/ANNOTATION_GUIDE.md`.
-2. Expand the labelled corpus using the active-learning queue.
+2. Expand the labelled corpus with the stratified, blind queue
+   (`python -m src.ml.annotation_queue build`, rebuilt on the canonical pool),
+   with a double-annotated overlap for inter-annotator agreement; QC with
+   `python -m src.ml.annotation_queue validate`.
 3. Run the forecasting pipeline over the full local dataset and publish the
    measured results to `reports/forecasting/`.
 4. Freeze a final test set; re-run the benchmark with

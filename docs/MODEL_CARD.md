@@ -45,7 +45,14 @@ on the corpus re-audit and expansion.
 ## Confidence and calibration
 
 Stage 1 probabilities are Platt-calibrated on validation only; Brier
-score and ECE are reported per run. Uncalibrated SVM margins are always
+score and ECE are reported per run. This includes logistic regression,
+whose native probabilities were previously used uncalibrated: with
+`class_weight="balanced"` they averaged 0.46 out of fold against a 0.30
+base rate (ECE 0.21). After validation Platt scaling the out-of-fold ECE
+is about 0.07 (`reports/ml/group_cv_report.md`).
+`ExperimentConfig.calibrate_probability_outputs = False` restores the old
+behaviour, and artefacts trained before the change are retrained rather
+than trusted. Uncalibrated SVM margins are always
 labelled as scores, never probabilities. With ~30 validation rows,
 calibration quality is itself preliminary.
 
@@ -64,6 +71,21 @@ sales: Kingdom Hearts IV is unreleased and no purchase conversion exists.
 A separate synthetic Bayesian marketing mix model (`docs/MMM_LAB.md`) is fitted
 only to simulated data and shares no inputs with this classifier.
 
+## Group-aware cross-validation (development)
+
+`python -m src.ml.group_cv` scores every labelled row out of fold (whole
+discussion groups per fold, nested validation for calibration and
+threshold). Mean over three fold seeds:
+
+| Model | Stage 1 PR-AUC (group-bootstrap 95%) | Lift@10% | Brier | ECE |
+|---|---|---|---|---|
+| char_word_svm | 0.65 (0.55–0.77) | 2.5 | 0.16 | 0.07 |
+| logistic (deployed) | 0.57 (0.47–0.69) | 2.1 | 0.18 | 0.07 |
+
+Base rate 0.30. `high_intent` F1 is 0 out of fold. The deployed model is not
+switched on this evidence; choose between the two under a frozen protocol on
+the expanded corpus.
+
 ## Bias, drift, and limitations
 
 - Inherits the platform/selection/topic biases in the data card;
@@ -71,6 +93,10 @@ only to simulated data and shares no inputs with this classifier.
 - Offline distribution-shift analysis (`reports/ml/drift_report.md`)
   covers split and source shifts; there is no production drift
   detection.
+- Long comments (>25 words) have a 52% Stage 1 false-positive rate against 9%
+  for short ones (char_word_svm, out of fold): length is a confounder.
+- Labels come from one annotator; first-pass and final labels agree on 57%
+  of rows (κ 0.30). Inter-annotator agreement is unmeasured.
 - With 23 discussion groups, split composition dominates variance:
   per-seed standard deviations are large and single-seed numbers are not
   meaningful.

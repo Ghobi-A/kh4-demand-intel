@@ -189,6 +189,18 @@ one either: being evaluated less is not a merit, and rewarding it would
 systematically favour the Bayesian model, which is backtested over fewer origins
 than the baselines because refitting a posterior at every origin is expensive.
 
+## Matched-origin sensitivity
+
+Because the Bayesian model is scored on only the most recent origins, every run
+writes `matched_origin_sensitivity.json`, `matched_origin_per_origin.csv` and
+`matched_origin_leave_one_out.csv` (`src/forecasting/sensitivity.py`). They show
+per-origin WAPE, the leader with each origin dropped, and how much of the gap
+between the leader and the Bayesian model comes from a single origin. A ranking
+on fewer than twelve forecasts, or one that flips when an origin is dropped, is
+labelled fragile. On the committed demo run, origin 208 produces the whole
+naive-vs-Bayesian gap, and dropping it leaves the two tied. This never changes
+which model is selected; it limits how strongly the selection can be read.
+
 ## Limitations
 
 - Community signals are not unit sales, and no purchase data exists to validate against.
@@ -201,7 +213,8 @@ than the baselines because refitting a posterior at every origin is expensive.
 ## Reproducing
 
 ```bash
-# Canonical run over the full local dataset
+# Canonical run over the full local dataset (check inputs first; exits 2 if blocked)
+python scripts/check_full_data_readiness.py
 python scripts/build_temporal_dataset.py --input data/processed/signals_scored.csv
 python scripts/run_forecasting.py --save-posterior
 
