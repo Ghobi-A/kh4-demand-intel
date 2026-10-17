@@ -557,6 +557,12 @@ def run_experiment(
     _write(all_forecasts, "forecast.csv")
     _write(all_matched, "model_comparison_matched_origins.csv")
 
+    sensitivity: dict = {}
+    if all_matched and all_backtests:
+        from src.forecasting.sensitivity import write_sensitivity
+
+        sensitivity = write_sensitivity(pd.concat(all_backtests, ignore_index=True), report_dir)
+
     observed_frames = [
         pd.DataFrame(
             {
@@ -632,12 +638,15 @@ def run_experiment(
             for target, outcome in per_target.items()
         },
         "probability_provenance": dataset.meta.get("probabilities", {}),
+        "matched_origin_sensitivity": sensitivity,
     }
     (report_dir / "run_metadata.json").write_text(json.dumps(metadata, indent=2, default=str))
 
     from src.forecasting.reporting import write_forecast_report
 
-    write_forecast_report(per_target, metadata, dataset, report_dir, demo=demo)
+    write_forecast_report(
+        per_target, metadata, dataset, report_dir, demo=demo, sensitivity=sensitivity
+    )
 
     return {"per_target": per_target, "metadata": metadata, "report_dir": report_dir}
 
