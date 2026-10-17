@@ -65,6 +65,13 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
     args = build_parser().parse_args()
     input_path = args.input or (DEMO_OUTPUT_PATH if args.demo else DEFAULT_OUTPUT_PATH)
+    if not Path(input_path).exists():
+        # Abstain explicitly rather than falling back to any other table.
+        raise SystemExit(
+            f"Weekly table not found: {input_path}. No forecasting result is "
+            "produced without it. Run `python scripts/check_full_data_readiness.py` "
+            "for the missing inputs and exact commands, or pass --demo."
+        )
 
     config = ForecastConfig(
         targets=tuple(args.targets),
