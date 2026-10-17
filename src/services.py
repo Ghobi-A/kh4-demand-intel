@@ -262,6 +262,7 @@ def mmm_summary(report_dir: Path | None = None) -> dict:
 def mmm_scenario(
     budget_changes: dict | None = None,
     price_change: float = 0.0,
+    reallocations: list | None = None,
     promotion: bool | None = None,
     event: bool | None = None,
     label: str = "scenario",
@@ -314,6 +315,7 @@ def mmm_scenario(
 
     scenario = MarketingScenario(
         budget_changes=budget_changes or {},
+        reallocations=[tuple(item) for item in (reallocations or [])],
         price_change=price_change,
         promotion=promotion,
         event=event,

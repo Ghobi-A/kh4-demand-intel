@@ -211,6 +211,36 @@ def test_mmm_scenario_is_labelled_synthetic(client, tmp_path, monkeypatch) -> No
     assert captured["budget_changes"] == {"social_spend": 0.8, "video_spend": 1.2}
 
 
+def test_mmm_scenario_passes_budget_neutral_reallocations(client, monkeypatch) -> None:
+    captured = {}
+
+    def _fake_scenario(**kwargs):
+        captured.update(kwargs)
+        return {
+            "notice": "SYNTHETIC — not Square Enix data",
+            "data_type": "synthetic",
+            "scenario": {},
+            "baseline_expected_sales": 1.0,
+            "scenario_expected_sales": 1.0,
+            "difference_mean": 0.0,
+            "difference_lower": 0.0,
+            "difference_upper": 0.0,
+            "difference_percent": 0.0,
+            "probability_of_increase": 0.5,
+            "channel_contribution_change": {},
+            "interpretation": "synthetic",
+        }
+
+    monkeypatch.setattr(services, "mmm_scenario", _fake_scenario)
+    response = client.post(
+        "/mmm/scenario",
+        json={"reallocations": [["social_spend", "video_spend", 0.2]]},
+    )
+
+    assert response.status_code == 200
+    assert captured["reallocations"] == [["social_spend", "video_spend", 0.2]]
+
+
 def test_mmm_scenario_reports_missing_posterior(client, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         services,

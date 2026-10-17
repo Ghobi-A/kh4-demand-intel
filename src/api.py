@@ -106,7 +106,17 @@ class MMMScenarioRequest(BaseModel):
 
     budget_changes: dict[str, float] = Field(
         default_factory=dict,
-        description="Per-channel spend multipliers, e.g. {'social_spend': 0.8, 'video_spend': 1.2}.",
+        description=(
+            "Per-channel spend multipliers, e.g. {'video_spend': 1.2}. These change "
+            "total spend; use `reallocations` for a budget-neutral move."
+        ),
+    )
+    reallocations: list[tuple[str, str, float]] = Field(
+        default_factory=list,
+        description=(
+            "Budget-neutral transfers [from_channel, to_channel, fraction], e.g. "
+            "[['social_spend', 'video_spend', 0.2]]."
+        ),
     )
     price_change: float = Field(default=0.0, ge=-50, le=50)
     promotion: bool | None = None
@@ -172,6 +182,7 @@ def post_mmm_scenario(request: MMMScenarioRequest) -> dict:
     try:
         return services.mmm_scenario(
             budget_changes=request.budget_changes,
+            reallocations=[list(item) for item in request.reallocations],
             price_change=request.price_change,
             promotion=request.promotion,
             event=request.event,

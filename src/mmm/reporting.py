@@ -168,7 +168,8 @@ def write_mmm_report(
             "## Scenario example",
             "",
             f"Plan: `{scenario['scenario']['label']}` "
-            f"({scenario['scenario']['budget_changes']}).",
+            f"(multipliers {scenario['scenario'].get('budget_changes') or {}}; "
+            f"budget-neutral transfers {scenario['scenario'].get('reallocations') or []}).",
             "",
             "| Quantity | Value |",
             "|---|---|",

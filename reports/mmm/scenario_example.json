@@ -2,10 +2,14 @@
   "notice": "SYNTHETIC MARKETING SCIENCE DEMONSTRATION \u2014 simulated data with known ground-truth parameters. This is not Square Enix data, and no quantity here describes actual commercial performance.",
   "data_type": "synthetic",
   "scenario": {
-    "budget_changes": {
-      "social_spend": 0.8,
-      "video_spend": 1.2
-    },
+    "budget_changes": {},
+    "reallocations": [
+      [
+        "social_spend",
+        "video_spend",
+        0.2
+      ]
+    ],
     "price_change": 0.0,
     "promotion": null,
     "event": null,
@@ -13,29 +17,29 @@
   },
   "interval_level": 0.9,
   "baseline_total_spend": 4270440.083588984,
-  "scenario_total_spend": 4537733.061479356,
-  "spend_change": 267292.9778903723,
-  "baseline_expected_sales": 821729.6249752832,
-  "scenario_expected_sales": 830190.3121781263,
-  "difference_mean": 8460.687202843223,
-  "difference_lower": 233.5836586268617,
-  "difference_upper": 15858.310402027368,
-  "difference_percent": 1.0296193474949515,
-  "probability_of_increase": 0.96,
+  "scenario_total_spend": 4270440.083588984,
+  "spend_change": 0.0,
+  "baseline_expected_sales": 822485.5276826859,
+  "scenario_expected_sales": 821892.5256440857,
+  "difference_mean": -593.0020386001561,
+  "difference_lower": -5732.569507428556,
+  "difference_upper": 3592.2145617901056,
+  "difference_percent": -0.07209878090753905,
+  "probability_of_increase": 0.465,
   "channel_contributions_baseline": {
-    "video_spend": 59903.17933785309,
-    "paid_search_spend": 65304.16126935311,
-    "social_spend": 29845.37041280876
+    "video_spend": 56668.70541517663,
+    "paid_search_spend": 67465.56486619005,
+    "social_spend": 34425.330238158254
   },
   "channel_contributions_scenario": {
-    "video_spend": 73745.12774265575,
-    "paid_search_spend": 65304.16126935311,
-    "social_spend": 23193.475508289506
+    "video_spend": 62260.036377145734,
+    "paid_search_spend": 67465.56486619005,
+    "social_spend": 27768.481620924096
   },
   "channel_contribution_change": {
-    "video_spend": 13841.948404802657,
+    "video_spend": 5591.330961969106,
     "paid_search_spend": 0.0,
-    "social_spend": -6651.894904519253
+    "social_spend": -6656.848617234158
   },
   "warnings": [],
   "interpretation": "Change in expected simulated sales under the stated plan, in a simulated market. Not a forecast of real commercial performance."

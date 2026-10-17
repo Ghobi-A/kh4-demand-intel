@@ -30,14 +30,19 @@ class MarketingScenario:
     """A hypothetical marketing plan expressed as changes to the baseline.
 
     Attributes:
-        budget_changes: Per-channel multipliers, e.g. {"social_spend": 0.8,
-            "video_spend": 1.2} to move a fifth of social budget into video.
+        budget_changes: Per-channel spend multipliers, e.g. {"video_spend": 1.2}
+            to raise video spend by a fifth. Multipliers change total spend; they
+            are not a reallocation.
+        reallocations: Budget-neutral transfers ``(from, to, fraction)``: each
+            week, ``fraction`` of the source channel's spend is moved into the
+            target channel, so total spend is unchanged.
         price_change: Additive change to price in currency units.
         promotion: Force promotion on (True) or off (False); None keeps it.
         event: Force event weeks on or off; None keeps them.
     """
 
     budget_changes: dict = field(default_factory=dict)
+    reallocations: list = field(default_factory=list)
     price_change: float = 0.0
     promotion: bool | None = None
     event: bool | None = None
@@ -52,6 +57,19 @@ class MarketingScenario:
                 raise ValueError(f"Unknown channel {channel!r}; known channels: {list(channels)}")
             if multiplier < 0:
                 raise ValueError(f"Budget multiplier for {channel} cannot be negative")
+        for transfer in self.reallocations:
+            if len(transfer) != 3:
+                raise ValueError("Each reallocation must be (from_channel, to_channel, fraction)")
+            source, target, fraction = transfer
+            for channel in (source, target):
+                if channel not in channels:
+                    raise ValueError(
+                        f"Unknown channel {channel!r}; known channels: {list(channels)}"
+                    )
+            if source == target:
+                raise ValueError("A reallocation needs two different channels")
+            if not 0 < float(fraction) < 1:
+                raise ValueError("Reallocation fraction must be between 0 and 1")
 
 
 def apply_scenario(data: pd.DataFrame, scenario: MarketingScenario, channels) -> pd.DataFrame:
@@ -60,6 +78,10 @@ def apply_scenario(data: pd.DataFrame, scenario: MarketingScenario, channels) ->
     plan = data.copy()
     for channel, multiplier in scenario.budget_changes.items():
         plan[channel] = plan[channel] * float(multiplier)
+    for source, target, fraction in scenario.reallocations:
+        moved = plan[source] * float(fraction)
+        plan[source] = plan[source] - moved
+        plan[target] = plan[target] + moved
     if scenario.price_change:
         plan["price"] = np.clip(plan["price"] + scenario.price_change, 0.01, None)
     if scenario.promotion is not None:
@@ -153,11 +175,18 @@ def simulate_scenario(
 def budget_reallocation(
     from_channel: str, to_channel: str, fraction: float, label: str | None = None
 ) -> MarketingScenario:
-    """Build the canonical 'move X% of one channel's budget into another' scenario."""
+    """Build the canonical 'move X% of one channel's budget into another' scenario.
+
+    The move is budget-neutral: each week ``fraction`` of ``from_channel``'s
+    spend is added to ``to_channel``. (Scaling the two channels by ``1 - f``
+    and ``1 + f`` is not a reallocation when their budgets differ: it changes
+    total spend, and the scenario difference then mostly measures the extra
+    spend.)
+    """
     if not 0 < fraction < 1:
         raise ValueError("fraction must be between 0 and 1")
     return MarketingScenario(
-        budget_changes={from_channel: 1.0 - fraction, to_channel: 1.0 + fraction},
+        reallocations=[(from_channel, to_channel, float(fraction))],
         label=label or f"move_{int(fraction * 100)}pct_{from_channel}_to_{to_channel}",
     )
 
