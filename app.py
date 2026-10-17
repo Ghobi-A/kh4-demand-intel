@@ -128,14 +128,17 @@ def render_header() -> None:
         st.markdown(
             "**Problem:** Fan sentiment alone does not reveal whether discussion "
             "signals purchase intent, reactivation, confusion, or churn risk.\n\n"
-            "**Method:** Public community discussion is cleaned, labelled with an "
-            "evaluated rule-based intent taxonomy, scored, and aggregated into a "
-            "recruiter-friendly Streamlit dashboard.\n\n"
+            "**Method:** Public community discussion is cleaned, classified into an "
+            "eight-class behavioural intent taxonomy (rule baseline plus supervised "
+            "models evaluated with group-held-out splits), scored, aggregated into "
+            "weekly demand proxies and forecast. A separate synthetic marketing mix "
+            "model demonstrates identifiability diagnostics.\n\n"
             "**Key finding:** Positive sentiment is not the same as behavioural "
             "intent; nostalgia, new-customer interest, frustration, and confusion "
             "need separate treatment.\n\n"
-            "**Validation:** A 200-row manual audit and regression tests enforce "
-            "precision floors for the highest-value intent classes."
+            "**Validation:** A 200-row single-annotator audit corpus, group-aware "
+            "cross-validation and regression tests. All model results are "
+            "development-preliminary; see the Overview tab for status and limits."
         )
 
 
@@ -206,9 +209,21 @@ def render_charts(filtered_df: pd.DataFrame, video_scores_df: pd.DataFrame) -> N
     st.bar_chart(top_videos.set_index("parent_id")["mean_demand_score"])
 
 
+#: Columns never shown in row-level tables. ``metadata`` is raw scraper JSON;
+#: the committed extract is sanitised, but a locally supplied SIGNALS_PATH may
+#: not be, so it is hidden here as a second line of defence.
+HIDDEN_TABLE_COLUMNS = {"metadata", "author", "username", "user", "permalink", "id"}
+
+
+def display_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop raw-metadata and identifier columns before showing rows."""
+    return df.drop(columns=[c for c in df.columns if c in HIDDEN_TABLE_COLUMNS])
+
+
 def render_tables(filtered_df: pd.DataFrame, video_scores_df: pd.DataFrame) -> None:
     """Render row-level and video-level tables."""
     st.header("Priority tables")
+    filtered_df = display_columns(filtered_df)
 
     st.subheader("Top 25 highest demand rows")
     st.dataframe(
@@ -277,6 +292,12 @@ def render_demand_tab(signals_df: pd.DataFrame, video_scores_df: pd.DataFrame) -
         st.warning("No rows match the selected filters. Clear filters to see results.")
         return
 
+    st.info(
+        "This tab shows the 304-row portfolio extract, sampled up to 60 rows per "
+        "**rule-predicted** intent class. Intent shares, sentiment shares and counts "
+        "below describe that stratified sample, not the full signal set, and "
+        "`intent_label` is the rule baseline's label, not a human label."
+    )
     render_kpis(filtered_df)
     render_charts(filtered_df, video_scores_df)
     render_tables(filtered_df, video_scores_df)
@@ -808,7 +829,7 @@ def render_scenario_planner_tab() -> None:
     to_channel = st.selectbox(
         "Move budget to", ["video_spend", "paid_search_spend", "social_spend"]
     )
-    fraction = st.slider("Share of budget to move", 0.05, 0.5, 0.20, 0.05)
+    fraction = st.slider("Share of the source channel's budget to move", 0.05, 0.5, 0.20, 0.05)
     price_change = st.slider("Price change", -10.0, 10.0, 0.0, 0.5)
     promotion = st.selectbox("Promotion", ["unchanged", "on", "off"])
 
@@ -818,7 +839,7 @@ def render_scenario_planner_tab() -> None:
             return
         try:
             result = mmm_scenario(
-                budget_changes={from_channel: 1.0 - fraction, to_channel: 1.0 + fraction},
+                reallocations=[(from_channel, to_channel, fraction)],
                 price_change=price_change,
                 promotion={"unchanged": None, "on": True, "off": False}[promotion],
                 label=f"move_{int(fraction * 100)}pct_{from_channel}_to_{to_channel}",
@@ -834,13 +855,229 @@ def render_scenario_planner_tab() -> None:
         st.caption(
             f"{int(result['interval_level'] * 100)}% interval: "
             f"{result['difference_lower']:,.0f} to {result['difference_upper']:,.0f} "
-            f"· probability of an increase {result['probability_of_increase']:.0%}"
+            f"· probability of an increase {result['probability_of_increase']:.0%} "
+            f"· total spend change {result.get('spend_change', 0.0):+,.0f} "
+            "(a reallocation is budget-neutral)"
         )
         st.subheader("Channel contribution change")
         st.bar_chart(pd.Series(result["channel_contribution_change"]))
         for warning in result.get("warnings", []):
             st.warning(warning)
         st.caption(result["interpretation"])
+
+
+# --- Overview: the most defensible findings first ---------------------------
+# Every number here is read from a generated artefact, so the cards cannot
+# drift from the reports they summarise. Missing artefacts degrade to a note.
+
+REPO_BLOB_URL = "https://github.com/Ghobi-A/kh4-demand-intel/blob/main"
+DATA_QUALITY_DIR = Path("reports/data_quality")
+GROUP_CV_DIR = ML_REPORT_DIR / "group_cv"
+DEMO_FORECAST_DIR = Path("reports/demo_forecasting")
+FULL_FORECAST_DIR = Path("reports/forecasting")
+MMM_DIR = Path("reports/mmm")
+
+BLOCKED_WORK = [
+    "Full-data forecasting evaluation: the canonical scored signal set "
+    "(`data/processed/signals_scored.csv`) is not in the repository.",
+    "Learning or evaluating `content_drought_fatigue` and `expectation_decay`: "
+    "zero human-labelled rows.",
+    "Reddit performance: 3 of 200 labelled rows.",
+    "Inter-annotator agreement: one annotator; a second, independent pass on the "
+    "double-annotation sample is needed.",
+    "Final held-out evaluation: requires an expanded corpus and a test set frozen "
+    "before further model changes.",
+]
+
+
+def _read_json_file(path: Path) -> dict:
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def overview_data() -> dict:
+    """Collect the headline evidence from generated artefacts (no Streamlit calls)."""
+    labelled = _read_json_file(DATA_QUALITY_DIR / "labelled_data_report.json")
+    audit = _read_json_file(DATA_QUALITY_DIR / "dataset_audit.json")
+    readiness = _read_json_file(DATA_QUALITY_DIR / "full_data_readiness.json")
+    group_cv = _read_json_file(GROUP_CV_DIR / "summary.json")
+
+    ranking = None
+    per_seed_path = GROUP_CV_DIR / "per_seed.csv"
+    if per_seed_path.exists():
+        per_seed = pd.read_csv(per_seed_path)
+        means = per_seed.groupby("model")[["pr_auc", "lift_at_10pct", "brier", "base_rate"]].mean()
+        best = means["pr_auc"].idxmax()
+        interval = group_cv.get("summaries", {}).get(best, {}).get("group_bootstrap_95", {})
+        ranking = {
+            "model": best,
+            "pr_auc": float(means.loc[best, "pr_auc"]),
+            "pr_auc_95": interval.get("pr_auc"),
+            "lift_at_10pct": float(means.loc[best, "lift_at_10pct"]),
+            "lift_95": interval.get("lift_at_10pct"),
+            "base_rate": float(means.loc[best, "base_rate"]),
+        }
+
+    forecast_dir = FULL_FORECAST_DIR if (FULL_FORECAST_DIR / "run_metadata.json").exists() else DEMO_FORECAST_DIR
+    forecast_meta = _read_json_file(forecast_dir / "run_metadata.json")
+    sensitivity = _read_json_file(forecast_dir / "matched_origin_sensitivity.json").get(
+        "actionable_probability_mass", {}
+    )
+
+    mmm_meta = _read_json_file(MMM_DIR / "run_metadata.json")
+    mmm_scenario = _read_json_file(MMM_DIR / "scenario_example.json")
+
+    sentiment = None
+    audit_path = Path("reports/audits/intent_audit_corrected.csv")
+    if audit_path.exists():
+        corpus = pd.read_csv(audit_path)
+        if {"sentiment_label", "corrected_label"}.issubset(corpus.columns):
+            general = corpus["corrected_label"] == "general_discussion"
+            positive = corpus["sentiment_label"] == "positive"
+            negative = corpus["sentiment_label"] == "negative"
+            sentiment = {
+                "positive": int(positive.sum()),
+                "positive_general": int((positive & general).sum()),
+                "negative": int(negative.sum()),
+                "negative_actionable": int((negative & ~general).sum()),
+            }
+
+    revision = audit.get("annotation_revision", {})
+    return {
+        "sentiment_vs_intent": sentiment,
+        "labelled_rows": labelled.get("total_rows"),
+        "labelled_groups": labelled.get("unique_groups"),
+        "source_distribution": labelled.get("source_distribution", {}),
+        "empty_classes": labelled.get("empty_classes", []),
+        "first_pass_kappa": revision.get("first_pass_vs_final_kappa"),
+        "ranking": ranking,
+        "forecast_status": forecast_meta.get("evaluation_status", "missing"),
+        "forecast_sample_only": bool(forecast_meta.get("sample_only", True)),
+        "forecast_sensitivity": sensitivity,
+        "full_data_status": readiness.get("status", "unknown"),
+        "mmm_checks": (mmm_meta.get("recovery_checks_passed"), mmm_meta.get("recovery_checks_total")),
+        "mmm_scenario": mmm_scenario,
+    }
+
+
+def _ci(interval) -> str:
+    if not interval:
+        return ""
+    return f" (group-bootstrap 95%: {interval[0]:.2f}–{interval[1]:.2f})"
+
+
+def render_overview_tab() -> None:
+    st.header("Overview")
+    data = overview_data()
+
+    status = st.columns(3)
+    status[0].metric("NLP models", "Development")
+    status[0].caption("Preliminary; not final held-out performance.")
+    status[1].metric(
+        "Forecasting evidence",
+        "Demo sample" if data["forecast_sample_only"] else data["forecast_status"],
+    )
+    status[1].caption(f"Full-data run: `{data['full_data_status']}`.")
+    status[2].metric("Marketing mix model", "Synthetic")
+    status[2].caption("Simulated data. Not Square Enix data.")
+
+    st.subheader("What the data is")
+    sources = ", ".join(f"{k} {v}" for k, v in data["source_distribution"].items())
+    st.markdown(
+        f"- **Observed behavioural data:** public YouTube and Reddit comments about "
+        f"KH4. The human-labelled corpus has **{data['labelled_rows']} rows across "
+        f"{data['labelled_groups']} discussion groups** ({sources}); classes with no "
+        f"labelled rows: {', '.join(f'`{c}`' for c in data['empty_classes']) or 'none'}.\n"
+        "- **Dashboard extract:** the *Demand Intelligence* tab shows a 304-row "
+        "extract sampled up to 60 rows per **rule-predicted** class. Its class mix is "
+        "a sampling artefact, not the real share of each intent.\n"
+        "- **Synthetic data:** the *Marketing Science Lab* and the synthetic mode of "
+        "the *Scenario Planner* use simulated spend and sales with known ground truth.\n"
+        "- Community discussion is not sales, revenue, or commercial demand."
+    )
+
+    st.subheader("Most defensible findings")
+    findings = []
+    sentiment = data["sentiment_vs_intent"]
+    if sentiment and sentiment["positive"] and sentiment["negative"]:
+        findings.append(
+            "**Sentiment is not behavioural intent.** In the human-labelled corpus, "
+            f"{sentiment['positive_general']} of {sentiment['positive']} VADER-positive "
+            f"comments ({sentiment['positive_general'] / sentiment['positive']:.0%}) are "
+            f"non-actionable discussion, while {sentiment['negative_actionable']} of "
+            f"{sentiment['negative']} negative comments "
+            f"({sentiment['negative_actionable'] / sentiment['negative']:.0%}) carry an "
+            "actionable signal (frustrated demand, confusion). Sample: 200 rows sampled "
+            "around rule behaviour, single annotator."
+        )
+    ranking = data["ranking"]
+    if ranking:
+        findings.append(
+            f"**Actionable-signal ranking beats random review, with wide uncertainty.** "
+            f"Out-of-fold, group-held-out PR-AUC {ranking['pr_auc']:.2f}{_ci(ranking['pr_auc_95'])} "
+            f"against a base rate of {ranking['base_rate']:.2f}; Lift@10% "
+            f"{ranking['lift_at_10pct']:.1f}{_ci(ranking['lift_95'])} ({ranking['model']})."
+        )
+    sensitivity = data["forecast_sensitivity"]
+    if sensitivity.get("available"):
+        findings.append(
+            "**No forecasting model is reliable on this history, and the "
+            "naive-vs-Bayesian ranking is not robust.** "
+            f"{sensitivity.get('verdict', '')} (Demo sample, not a measured result.)"
+        )
+    passed, total = data["mmm_checks"]
+    scenario = data["mmm_scenario"]
+    if passed is not None:
+        text = (
+            f"**The synthetic MMM shows its identifiability limits.** It passes "
+            f"{passed}/{total} recovery checks against known ground truth but swaps "
+            "the top two channels and under-attributes total media contribution."
+        )
+        if scenario:
+            text += (
+                f" A budget-neutral 20% social-to-video move changes simulated sales by "
+                f"{scenario['difference_mean']:+,.0f} (90% interval "
+                f"{scenario['difference_lower']:+,.0f} to {scenario['difference_upper']:+,.0f})."
+            )
+        findings.append(text)
+    for item in findings:
+        st.markdown(f"- {item}")
+
+    st.subheader("Limits and blocked work")
+    if data["first_pass_kappa"] is not None:
+        st.markdown(
+            f"- One annotator; first-pass vs final label kappa "
+            f"{data['first_pass_kappa']:.2f} (a revision rate, not inter-annotator agreement)."
+        )
+    for item in BLOCKED_WORK:
+        st.markdown(f"- {item}")
+
+    st.subheader("Evidence")
+    links = {
+        "Portfolio readiness audit": "docs/PORTFOLIO_READINESS_AUDIT.md",
+        "Group-aware CV evaluation": "reports/ml/group_cv_report.md",
+        "Dataset and annotation audit": "reports/data_quality/dataset_audit.md",
+        "Full-data readiness": "reports/data_quality/full_data_readiness.md",
+        "Forecast report (demo)": "reports/demo_forecasting/forecast_report.md",
+        "Synthetic MMM report": "reports/mmm/mmm_report.md",
+    }
+    st.markdown(
+        "\n".join(
+            f"- [{name}]({REPO_BLOB_URL}/{path})"
+            + ("" if Path(path).exists() else " (not generated in this deployment)")
+            for name, path in links.items()
+        )
+    )
+
+
+def _render_demand_intelligence() -> None:
+    if require_files():
+        signals_df = load_csv(SIGNALS_PATH)
+        video_scores_df = load_csv(VIDEO_SCORES_PATH)
+        if validate_columns(signals_df, video_scores_df):
+            render_demand_tab(signals_df, video_scores_df)
 
 
 def main() -> None:
@@ -855,6 +1092,7 @@ def main() -> None:
 
     tabs = st.tabs(
         [
+            "Overview",
             "Demand Intelligence",
             "Model Performance",
             "Model Comparison",
@@ -869,32 +1107,29 @@ def main() -> None:
         ]
     )
 
-    with tabs[0]:
-        if require_files():
-            signals_df = load_csv(SIGNALS_PATH)
-            video_scores_df = load_csv(VIDEO_SCORES_PATH)
-            if validate_columns(signals_df, video_scores_df):
-                render_demand_tab(signals_df, video_scores_df)
-    with tabs[1]:
-        render_model_performance_tab()
-    with tabs[2]:
-        render_model_comparison_tab()
-    with tabs[3]:
-        render_error_analysis_tab()
-    with tabs[4]:
-        render_drift_tab()
-    with tabs[5]:
-        render_events_tab()
-    with tabs[6]:
-        render_forecasting_tab()
-    with tabs[7]:
-        render_forecast_monitoring_tab()
-    with tabs[8]:
-        render_marketing_lab_tab()
-    with tabs[9]:
-        render_scenario_planner_tab()
-    with tabs[10]:
-        render_live_inference_tab()
+    renderers = [
+        render_overview_tab,
+        _render_demand_intelligence,
+        render_model_performance_tab,
+        render_model_comparison_tab,
+        render_error_analysis_tab,
+        render_drift_tab,
+        render_events_tab,
+        render_forecasting_tab,
+        render_forecast_monitoring_tab,
+        render_marketing_lab_tab,
+        render_scenario_planner_tab,
+        render_live_inference_tab,
+    ]
+    for tab, renderer in zip(tabs, renderers):
+        with tab:
+            try:
+                renderer()
+            except Exception as exc:  # noqa: BLE001 - one broken tab must not blank the app
+                st.error(
+                    f"This tab could not be rendered ({type(exc).__name__}: {exc}). "
+                    "The other tabs are unaffected."
+                )
 
     st.caption(
         "Unofficial portfolio project. Not affiliated with Square Enix, Disney, "
