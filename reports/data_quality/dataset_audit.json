@@ -1,0 +1,385 @@
+{
+  "rows": 200,
+  "groups": 23,
+  "annotators": [
+    "annotator_1"
+  ],
+  "class_by_source": {
+    "reddit": {
+      "high_intent": 0,
+      "nostalgia_reactivation": 0,
+      "new_customer_interest": 0,
+      "frustrated_demand": 2,
+      "content_drought_fatigue": 0,
+      "confusion_barrier": 0,
+      "expectation_decay": 0,
+      "general_discussion": 1
+    },
+    "youtube": {
+      "high_intent": 7,
+      "nostalgia_reactivation": 8,
+      "new_customer_interest": 2,
+      "frustrated_demand": 23,
+      "content_drought_fatigue": 0,
+      "confusion_barrier": 18,
+      "expectation_decay": 0,
+      "general_discussion": 139
+    }
+  },
+  "class_by_sample_strategy": {
+    "precision": {
+      "high_intent": 4,
+      "nostalgia_reactivation": 6,
+      "new_customer_interest": 1,
+      "frustrated_demand": 20,
+      "content_drought_fatigue": 0,
+      "confusion_barrier": 17,
+      "expectation_decay": 0,
+      "general_discussion": 52
+    },
+    "recall": {
+      "high_intent": 3,
+      "nostalgia_reactivation": 2,
+      "new_customer_interest": 1,
+      "frustrated_demand": 5,
+      "content_drought_fatigue": 0,
+      "confusion_barrier": 1,
+      "expectation_decay": 0,
+      "general_discussion": 88
+    }
+  },
+  "classes_below_evaluation_minimum": [
+    "confusion_barrier",
+    "content_drought_fatigue",
+    "expectation_decay",
+    "frustrated_demand",
+    "high_intent",
+    "new_customer_interest",
+    "nostalgia_reactivation"
+  ],
+  "min_rows_for_evaluation": 30,
+  "top3_group_share": 0.335,
+  "single_row_groups": 6,
+  "group_table": [
+    {
+      "parent_id": "yt:G5_3qdf19BU",
+      "rows": 23,
+      "actionable_share": 0.34782608695652173,
+      "classes": 5,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:gNVWtjbGWdw",
+      "rows": 23,
+      "actionable_share": 0.34782608695652173,
+      "classes": 4,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:nS1DfiJAtEk",
+      "rows": 21,
+      "actionable_share": 0.42857142857142855,
+      "classes": 4,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:zux8BX6EuxI",
+      "rows": 19,
+      "actionable_share": 0.05263157894736842,
+      "classes": 2,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:j2DSEkYFRh8",
+      "rows": 19,
+      "actionable_share": 0.3684210526315789,
+      "classes": 5,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:9d8LK9840IU",
+      "rows": 18,
+      "actionable_share": 0.2777777777777778,
+      "classes": 3,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:-3-bVFiTTCE",
+      "rows": 10,
+      "actionable_share": 0.4,
+      "classes": 3,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:Xt_hGLer2gk",
+      "rows": 9,
+      "actionable_share": 0.1111111111111111,
+      "classes": 2,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:6g5otBrymgI",
+      "rows": 9,
+      "actionable_share": 0.3333333333333333,
+      "classes": 4,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:eFfZqeXbioU",
+      "rows": 9,
+      "actionable_share": 0.5555555555555556,
+      "classes": 4,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:78pm-aBw_Ck",
+      "rows": 7,
+      "actionable_share": 0.0,
+      "classes": 1,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:sz5gq0LgYWw",
+      "rows": 6,
+      "actionable_share": 0.3333333333333333,
+      "classes": 2,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:AaZjLq3cIpg",
+      "rows": 5,
+      "actionable_share": 0.0,
+      "classes": 1,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:XO1PlvNN_7s",
+      "rows": 5,
+      "actionable_share": 0.2,
+      "classes": 2,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:ZxKqFEAARYU",
+      "rows": 4,
+      "actionable_share": 0.5,
+      "classes": 2,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:mU1zHAA9j8k",
+      "rows": 4,
+      "actionable_share": 0.0,
+      "classes": 1,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:wwgOM_BiRQo",
+      "rows": 3,
+      "actionable_share": 0.3333333333333333,
+      "classes": 2,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "rd:1k1ghxg",
+      "rows": 1,
+      "actionable_share": 1.0,
+      "classes": 1,
+      "source": "reddit"
+    },
+    {
+      "parent_id": "rd:1kmwpfq",
+      "rows": 1,
+      "actionable_share": 0.0,
+      "classes": 1,
+      "source": "reddit"
+    },
+    {
+      "parent_id": "yt:1gnE_NzfmSc",
+      "rows": 1,
+      "actionable_share": 0.0,
+      "classes": 1,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "rd:1htbrfp",
+      "rows": 1,
+      "actionable_share": 1.0,
+      "classes": 1,
+      "source": "reddit"
+    },
+    {
+      "parent_id": "yt:bUM2sSVjCLQ",
+      "rows": 1,
+      "actionable_share": 1.0,
+      "classes": 1,
+      "source": "youtube"
+    },
+    {
+      "parent_id": "yt:_cyFXvII1sQ",
+      "rows": 1,
+      "actionable_share": 0.0,
+      "classes": 1,
+      "source": "youtube"
+    }
+  ],
+  "near_duplicate_threshold": 0.8,
+  "near_duplicate_pairs": [
+    {
+      "record_id_a": "UgzIsA1kRlC7XwIQDp14AaABAg",
+      "record_id_b": "UgyEMYG859pGoQSpmGx4AaABAg",
+      "group_a": "yt:ZxKqFEAARYU",
+      "group_b": "yt:XO1PlvNN_7s",
+      "label_a": "general_discussion",
+      "label_b": "general_discussion",
+      "similarity": 0.85,
+      "crosses_groups": true,
+      "labels_differ": false
+    }
+  ],
+  "near_duplicates_crossing_groups": 1,
+  "split_leakage_problems": [],
+  "test_support_by_seed": [
+    {
+      "seed": 42,
+      "test_rows": 29,
+      "test_groups": 4,
+      "high_intent": 1,
+      "nostalgia_reactivation": 1,
+      "new_customer_interest": 0,
+      "frustrated_demand": 7,
+      "content_drought_fatigue": 0,
+      "confusion_barrier": 0,
+      "expectation_decay": 0,
+      "general_discussion": 20
+    },
+    {
+      "seed": 43,
+      "test_rows": 40,
+      "test_groups": 4,
+      "high_intent": 2,
+      "nostalgia_reactivation": 2,
+      "new_customer_interest": 1,
+      "frustrated_demand": 3,
+      "content_drought_fatigue": 0,
+      "confusion_barrier": 3,
+      "expectation_decay": 0,
+      "general_discussion": 29
+    },
+    {
+      "seed": 44,
+      "test_rows": 28,
+      "test_groups": 4,
+      "high_intent": 1,
+      "nostalgia_reactivation": 1,
+      "new_customer_interest": 0,
+      "frustrated_demand": 8,
+      "content_drought_fatigue": 0,
+      "confusion_barrier": 0,
+      "expectation_decay": 0,
+      "general_discussion": 18
+    },
+    {
+      "seed": 45,
+      "test_rows": 27,
+      "test_groups": 7,
+      "high_intent": 2,
+      "nostalgia_reactivation": 0,
+      "new_customer_interest": 1,
+      "frustrated_demand": 4,
+      "content_drought_fatigue": 0,
+      "confusion_barrier": 4,
+      "expectation_decay": 0,
+      "general_discussion": 16
+    },
+    {
+      "seed": 46,
+      "test_rows": 42,
+      "test_groups": 2,
+      "high_intent": 1,
+      "nostalgia_reactivation": 1,
+      "new_customer_interest": 0,
+      "frustrated_demand": 6,
+      "content_drought_fatigue": 0,
+      "confusion_barrier": 1,
+      "expectation_decay": 0,
+      "general_discussion": 33
+    }
+  ],
+  "seeds_with_zero_test_support": {
+    "high_intent": 0,
+    "nostalgia_reactivation": 1,
+    "new_customer_interest": 3,
+    "frustrated_demand": 0,
+    "content_drought_fatigue": 5,
+    "confusion_barrier": 2,
+    "expectation_decay": 5,
+    "general_discussion": 0
+  },
+  "rule_agreement_by_sample_strategy": {
+    "precision": 0.39,
+    "recall": 0.88
+  },
+  "timestamps_available": 0,
+  "annotation_revision": {
+    "available": true,
+    "rows_with_both_passes": 196,
+    "rows_without_first_pass": 4,
+    "unchanged_share": 0.5663265306122449,
+    "revised_rows": 85,
+    "first_pass_vs_final_kappa": 0.2963338401757054,
+    "top_revisions": [
+      {
+        "first_pass": "frustrated_demand",
+        "final": "general_discussion",
+        "rows": 22
+      },
+      {
+        "first_pass": "nostalgia_reactivation",
+        "final": "general_discussion",
+        "rows": 13
+      },
+      {
+        "first_pass": "frustrated_demand",
+        "final": "confusion_barrier",
+        "rows": 6
+      },
+      {
+        "first_pass": "general_discussion",
+        "final": "confusion_barrier",
+        "rows": 6
+      },
+      {
+        "first_pass": "new_customer_interest",
+        "final": "general_discussion",
+        "rows": 6
+      },
+      {
+        "first_pass": "nostalgia_reactivation",
+        "final": "frustrated_demand",
+        "rows": 5
+      },
+      {
+        "first_pass": "confusion_barrier",
+        "final": "general_discussion",
+        "rows": 4
+      },
+      {
+        "first_pass": "content_drought_fatigue",
+        "final": "general_discussion",
+        "rows": 3
+      },
+      {
+        "first_pass": "nostalgia_reactivation",
+        "final": "confusion_barrier",
+        "rows": 3
+      },
+      {
+        "first_pass": "general_discussion",
+        "final": "nostalgia_reactivation",
+        "rows": 3
+      }
+    ],
+    "interpretation": "Same annotator, two passes. This measures how much the first pass was revised, not how reproducible the labels are between people. Inter-annotator agreement is unmeasured until a second, independent annotator labels an overlap sample (src.ml.agreement)."
+  }
+}
