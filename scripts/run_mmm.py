@@ -29,6 +29,8 @@ from src.mmm.model import MMMSamplerConfig, fit_mmm  # noqa: E402
 from src.mmm.reporting import write_mmm_report  # noqa: E402
 from src.mmm.scenarios import budget_reallocation, simulate_scenario  # noqa: E402
 from src.mmm.synthetic import SyntheticMMMConfig, generate_synthetic_mmm  # noqa: E402
+from src.posterior_store import save_thinned  # noqa: E402
+from src.services import MMM_THINNED_POSTERIOR as THINNED_POSTERIOR_NAME  # noqa: E402
 
 DEFAULT_REPORT_DIR = Path("reports/mmm")
 
@@ -128,16 +130,16 @@ def main() -> None:
     }
     (report_dir / "run_metadata.json").write_text(json.dumps(metadata, indent=2, default=str))
 
+    posterior_arrays = {
+        key: value for key, value in fit.posterior.items() if isinstance(value, np.ndarray)
+    }
+    # Always write the small run-stamped copy, so a deployed dashboard can run
+    # scenarios against exactly this fit without the git-ignored full samples.
+    thinned = save_thinned(report_dir / THINNED_POSTERIOR_NAME, posterior_arrays, metadata["run_id"])
+    print(f"Wrote thinned posterior samples to {thinned}")
     if args.save_posterior:
         path = report_dir / "posterior_samples.npz"
-        np.savez_compressed(
-            path,
-            **{
-                key: value
-                for key, value in fit.posterior.items()
-                if isinstance(value, np.ndarray)
-            },
-        )
+        np.savez_compressed(path, **posterior_arrays)
         print(f"Wrote posterior samples to {path}")
 
     write_mmm_report(fit, truth, recovery, notes, scenario_result, metadata, report_dir)
