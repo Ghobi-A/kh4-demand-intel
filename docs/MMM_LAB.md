@@ -164,5 +164,7 @@ extrapolation rather than an estimate.
 ```bash
 python -m src.mmm.synthetic                    # regenerate the dataset (fixed seed)
 python scripts/run_mmm.py --save-posterior     # fit, evaluate, scenario, report
+# Every run also writes reports/mmm/posterior_thinned.npz (<=1,000 draws, stamped
+# with the run ID), which the deployed dashboard and API use for scenarios.
 python scripts/run_mmm.py --correlated-channels  # harder identifiability case
 ```

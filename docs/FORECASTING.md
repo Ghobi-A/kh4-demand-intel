@@ -217,6 +217,8 @@ which model is selected; it limits how strongly the selection can be read.
 python scripts/check_full_data_readiness.py
 python scripts/build_temporal_dataset.py --input data/processed/signals_scored.csv
 python scripts/run_forecasting.py --save-posterior
+# Every run also writes posterior_thinned_<target>.npz (<=1,000 draws, stamped
+# with the run ID) for the deployed scenario planner and API.
 
 # Smoke run over the committed sample (not a substantive result)
 python scripts/build_temporal_dataset.py --demo

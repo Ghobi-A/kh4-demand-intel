@@ -287,11 +287,24 @@ their uncertainty, blocked work and links to evidence, all read from generated
 artefacts), **Demand Intelligence** (the 304-row class-stratified extract, with
 a banner saying so), **Model
 Performance**, **Model Comparison**, **Error Analysis**, **Drift**,
-**Events**, **Forecasting**, **Forecast Monitoring**, **Marketing Science
-Lab**, **Scenario Planner**, and **Live Inference**. The app shows the
-current model status, renders generated report artefacts rather than
-fitting models at page load, and degrades gracefully when report files are
-absent.
+**Events** (shown only when the local full-pipeline event outputs exist),
+**Forecasting**, **Forecast Monitoring**, **Marketing Science Lab**,
+**Scenario Planner**, and **Live Inference**. The app shows the current model
+status, renders generated report artefacts rather than fitting Bayesian models
+at page load, and degrades gracefully when report files are absent.
+
+Two things make a fresh or deployed checkout fully interactive without any
+git-ignored file:
+
+- **Scenarios** run against small *thinned* posterior samples
+  (`reports/**/posterior_thinned*.npz`, at most 1,000 draws) that every
+  forecasting and MMM run writes, stamped with its run ID. A stamp that does
+  not match the run's `run_metadata.json` is refused as stale. Full samples
+  (`--save-posterior`) stay local and take precedence when present.
+- **Live Inference** uses the persisted model if one exists; otherwise it trains
+  the same two-stage logistic model `python -m src.ml.train` builds, once per
+  server process, from the committed labelled corpus (about a second), and the
+  tab says which happened.
 
 
 ## 12. Temporal foundations and demand proxies
@@ -389,7 +402,8 @@ uvicorn src.api:app --reload
 | `POST /mmm/scenario` | Synthetic marketing scenario |
 
 Handlers contain no business logic; both interfaces call `src/services.py`, so
-they cannot answer differently. Neither fits a model at request time.
+they cannot answer differently. Neither fits a Bayesian model at request time;
+scenarios use the run-stamped thinned posterior samples described above.
 
 ## 16. Reproducing the temporal and marketing work
 
