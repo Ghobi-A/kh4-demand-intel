@@ -111,6 +111,7 @@ Streamlit Community Cloud uses).
 | E6 | P2 | Verified, fixed | **First impression:** the header still read "a lightweight portfolio dashboard … heuristic demand signals", and the Demand tab's filters sat in the sidebar on every tab, doing nothing outside that tab. | New header text; filters moved into the Demand Intelligence tab. A README screenshot was added, since the live link is not public. |
 | E7 | P3 | Verified, fixed | `run_temporal_pipeline.py` and `enrich_timestamps` showed raw tracebacks on missing input. | Clean abstention messages. |
 | E8 | P2 | Verified, fixed | **The Events tab is always empty in deployment**, because it reads git-ignored `data/processed/` outputs. | The tab is shown only when its outputs exist. |
+| E9 | P1 | Verified, fixed (pre-existing) | **Saved MMM posterior samples could not run a scenario.** `run_mmm.py` saved only ndarray entries, which dropped the scalar centring constants (`price_mean`, `sales_mean`, `sales_std`, `week_mean`, `week_scale`). The API and dashboard raised `KeyError`, and `predict_sales` would otherwise have fallen back to 0/1 defaults and returned wrong numbers. This affected `--save-posterior` before this PR too. | Constants saved at full precision; the scenario service refuses samples missing any required key. Verified on a clean clone with only `requirements.txt` installed. |
 | F9 | P1 | Re-verified, open | The live URL still redirects anonymous visitors to Streamlit sign-in (HTTP 303). | Owner: check the app's sharing settings in Streamlit Community Cloud. |
 
 ## Reproducible commands
