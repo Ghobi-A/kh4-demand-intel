@@ -3,8 +3,8 @@
 > **Demo smoke run — not a substantive result.** This report was generated from the class-stratified 304-row portfolio extract, which is not volume-representative. It exists to prove the pipeline runs end to end. Measured forecasting results require a run over the full canonical dataset.
 
 
-- Run: `6f0c63969a90` at 2026-10-17T00:18:39.275505+00:00
-- Git commit: `ca7fca9`
+- Run: `c77f1b6aa307` at 2026-10-19T21:31:46.426422+00:00
+- Git commit: `a2e563f`
 - Input: `data/demo/weekly_demand_signals_demo.csv` (hash `f03bb95e6835a8ce`)
 - Evaluation status: `demo_only`
 - Volume representative: False

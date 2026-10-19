@@ -1,7 +1,7 @@
 {
-  "run_id": "f68c3d950b00",
-  "timestamp": "2026-10-17T00:07:02.972971+00:00",
-  "git_commit": "ca7fca9",
+  "run_id": "438283d854d0",
+  "timestamp": "2026-10-19T21:33:57.632828+00:00",
+  "git_commit": "a2e563f",
   "notice": "SYNTHETIC MARKETING SCIENCE DEMONSTRATION \u2014 simulated data with known ground-truth parameters. This is not Square Enix data, and no quantity here describes actual commercial performance.",
   "data_type": "synthetic",
   "is_square_enix_data": false,

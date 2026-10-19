@@ -1,7 +1,7 @@
 {
-  "run_id": "6f0c63969a90",
-  "timestamp": "2026-10-17T00:18:39.275505+00:00",
-  "git_commit": "ca7fca9",
+  "run_id": "c77f1b6aa307",
+  "timestamp": "2026-10-19T21:31:46.426422+00:00",
+  "git_commit": "a2e563f",
   "input_path": "data/demo/weekly_demand_signals_demo.csv",
   "input_hash": "f03bb95e6835a8ce",
   "observed_period": {
