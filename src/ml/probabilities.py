@@ -55,16 +55,21 @@ def _file_hash(path: Path) -> str | None:
 def _is_compatible(metadata: dict) -> bool:
     """Check a persisted artefact against the current taxonomy and score type.
 
-    An artefact is usable when its Stage 1 output is a probability — either
-    because a calibrator was fitted, or because the estimator emits
-    probabilities natively. An uncalibrated margin is not accepted.
+    An artefact is usable when its Stage 1 output is a calibrated probability.
+    A native probability (logistic) without a calibrator is accepted only if
+    the artefact records that calibration was deliberately switched off;
+    artefacts trained before probability outputs were Platt-scaled carry no
+    such record and are retrained. An uncalibrated margin is never accepted.
     """
     classes = set(metadata.get("stage2_classes", []))
     if not classes or not classes.issubset(set(TAXONOMY)):
         return False
     if metadata.get("calibrated", False):
         return True
-    return metadata.get("stage1_score_type") == SCORE_PROBABILITY
+    return (
+        metadata.get("stage1_score_type") == SCORE_PROBABILITY
+        and metadata.get("calibrate_probability_outputs") is False
+    )
 
 
 def ensure_hierarchical_model(

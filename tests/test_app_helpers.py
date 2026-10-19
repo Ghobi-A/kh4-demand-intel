@@ -47,3 +47,21 @@ def test_filter_dataframe_applies_selected_values() -> None:
     )
 
     assert filtered["demand_score"].tolist() == [3.5, 2.1]
+
+
+def test_overview_data_reads_generated_artefacts() -> None:
+    app = _import_app_with_streamlit_stub()
+    data = app.overview_data()
+
+    assert data["labelled_rows"] == 200
+    assert data["forecast_sample_only"] is True  # committed forecast is a demo run
+    assert data["sentiment_vs_intent"]["positive"] > 0
+    assert data["ranking"]["pr_auc"] > data["ranking"]["base_rate"]
+    passed, total = data["mmm_checks"]
+    assert 0 < passed <= total
+
+
+def test_display_columns_hide_raw_metadata() -> None:
+    app = _import_app_with_streamlit_stub()
+    frame = pd.DataFrame({"text": ["x"], "metadata": ["{}"], "author": ["a"]})
+    assert list(app.display_columns(frame).columns) == ["text"]

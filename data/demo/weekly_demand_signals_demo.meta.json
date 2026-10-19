@@ -1,11 +1,15 @@
 {
   "source_dataset": "data/demo/signals_scored_portfolio.csv",
-  "source_dataset_hash": "470790bb1fc09117",
+  "source_dataset_hash": "f03bb95e6835a8ce",
   "output": "data/demo/weekly_demand_signals_demo.csv",
   "generated_freq": "W-MON",
   "sample_only": true,
   "volume_representative": false,
   "evaluation_status": "demo_only",
+  "youtube_collection": {
+    "manifest_path": "reports/tables/youtube_fetch_manifest.csv",
+    "manifest_found": false
+  },
   "primary_target": "actionable_probability_mass",
   "primary_target_available": true,
   "primary_target_definition": "Sum of calibrated P(actionable) over comments observed in the period. An expected actionable-signal volume (behavioural demand proxy), not expected purchases or sales.",
@@ -13,13 +17,13 @@
     "model_run": {
       "model_name": "logistic",
       "seed": 42,
-      "git_commit": "aed69a9",
+      "git_commit": "ca7fca9",
       "dataset_hash": "450745418479c703",
       "annotation_version": null,
       "artifact_dir": "artifacts/hierarchical",
-      "artifact_hash": "0bb6c477c840450e",
+      "artifact_hash": "b848f82d9669895e",
       "evaluation_status": "development_preliminary",
-      "threshold": 0.4570716003446549
+      "threshold": 0.3523235947665243
     },
     "probability_generation": "persisted_artifact",
     "oof_folds": 5,

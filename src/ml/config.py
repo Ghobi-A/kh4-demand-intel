@@ -33,6 +33,12 @@ class ExperimentConfig:
     split: SplitConfig = field(default_factory=SplitConfig)
     threshold: ThresholdConfig = field(default_factory=ThresholdConfig)
     calibration_method: str = "sigmoid"
+    # Models whose raw output is already a probability (logistic regression) are
+    # still Platt-scaled on validation. With class_weight="balanced" their raw
+    # probabilities are shifted towards 0.5 (mean ~0.46 against a 0.30 base
+    # rate, out of fold), and those probabilities feed the weekly demand proxy.
+    # False restores the earlier behaviour of using them uncalibrated.
+    calibrate_probability_outputs: bool = True
     ranking_percentages: list[float] = field(default_factory=lambda: [0.05, 0.10, 0.20])
     ranking_k_values: list[int] = field(default_factory=lambda: [10, 25, 50, 100])
     evaluation_status: str = "development_preliminary"

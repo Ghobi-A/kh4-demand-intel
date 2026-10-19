@@ -75,6 +75,7 @@ def write_forecast_report(
     dataset,
     report_dir: Path,
     demo: bool = False,
+    sensitivity: dict | None = None,
 ) -> Path:
     """Render forecast_report.md from the run's generated results."""
     from src.forecasting.experiment import DEMO_BANNER
@@ -157,6 +158,17 @@ def write_forecast_report(
                 "",
             ]
             lines += _comparison_table(matched)
+            target_sensitivity = (sensitivity or {}).get(target, {})
+            if target_sensitivity.get("available"):
+                lines += [
+                    "",
+                    "#### How much this ranking can be trusted",
+                    "",
+                    target_sensitivity["verdict"],
+                    "",
+                    "Per-origin errors: `matched_origin_per_origin.csv`; "
+                    "leave-one-origin-out: `matched_origin_leave_one_out.csv`.",
+                ]
 
         lines += [
             "",

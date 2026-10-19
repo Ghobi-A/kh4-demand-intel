@@ -61,6 +61,7 @@ def train_and_save(
         "evaluation_mode": split.evaluation_mode,
         "evaluation_status": EVALUATION_STATUS_DEVELOPMENT,
         "threshold_selection": threshold_info,
+        "calibrate_probability_outputs": config.calibrate_probability_outputs,
         "notes": notes,
     }
     path = save_hierarchical_model(model, metadata, artifact_dir)

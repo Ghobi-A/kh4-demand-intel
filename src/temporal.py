@@ -126,6 +126,34 @@ def _youtube_collection_meta(
     return meta
 
 
+DEMO_DIR = DEMO_INPUT_PATH.parent
+
+
+def is_known_demo_extract(input_path: Path, signals: pd.DataFrame | None = None) -> bool:
+    """True when the input is one of the committed demo extracts.
+
+    Checked by location and, so a renamed or copied extract is still caught, by
+    content hash against every ``data/demo/signals_scored_*.csv``. A demo
+    extract built without ``--demo`` would otherwise be stamped
+    ``full_dataset`` / ``volume_representative = true``.
+    """
+    try:
+        Path(input_path).resolve().relative_to(DEMO_DIR.resolve())
+        return True
+    except ValueError:
+        pass
+    if signals is None or not DEMO_DIR.exists():
+        return False
+    digest = dataframe_hash(signals)
+    for candidate in sorted(DEMO_DIR.glob("signals_scored_*.csv")):
+        try:
+            if dataframe_hash(pd.read_csv(candidate)) == digest:
+                return True
+        except Exception:  # noqa: BLE001 - an unreadable candidate cannot match
+            continue
+    return False
+
+
 def _should_use_youtube_manifest(input_path: Path) -> bool:
     """Avoid letting a repo-local manifest contaminate external/tmp datasets."""
     try:
@@ -272,6 +300,12 @@ def build_temporal_dataset(
     output_path = Path(output_path)
 
     signals = pd.read_csv(input_path)
+    if not demo and is_known_demo_extract(input_path, signals):
+        raise ValueError(
+            f"{input_path} is a committed demo extract (class-stratified, not "
+            "volume-representative). Re-run with --demo; it must never be "
+            "stamped as the full canonical dataset."
+        )
     source_hash = dataframe_hash(signals)
 
     probability_meta: dict = {}
@@ -369,6 +403,14 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
     args = _build_parser().parse_args()
     input_path = args.input or (DEMO_INPUT_PATH if args.demo else DEFAULT_INPUT_PATH)
+    if not Path(input_path).exists():
+        # Abstain explicitly: no stand-in data is ever substituted.
+        raise SystemExit(
+            f"Input not found: {input_path}. The full scored signal set is not "
+            "committed; regenerate it locally (see "
+            "`python scripts/check_full_data_readiness.py`), or pass --demo for "
+            "the stratified smoke sample."
+        )
     weekly, meta = build_temporal_dataset(
         input_path=input_path,
         output_path=args.output,

@@ -1,0 +1,68 @@
+{
+  "generated_at": "2026-10-17T00:16:54.087884+00:00",
+  "pool_path": "data/demo/signals_scored_portfolio.csv",
+  "pool_kind": "demo_extract",
+  "pool_hash": "411aadad8ecfbf63",
+  "pool_rows": 304,
+  "eligible_rows": 139,
+  "excluded": {
+    "empty_text": 0,
+    "already_labelled": 160,
+    "duplicate_in_pool": 0,
+    "near_duplicate_of_labelled": 5
+  },
+  "rare_classes_targeted": [
+    "content_drought_fatigue",
+    "expectation_decay",
+    "high_intent",
+    "new_customer_interest",
+    "nostalgia_reactivation"
+  ],
+  "strata": {
+    "random_control": {
+      "quota": 25,
+      "eligible": 139,
+      "selected": 25,
+      "shortfall": 0
+    },
+    "missing_class_candidate": {
+      "quota": 40,
+      "eligible": 18,
+      "selected": 18,
+      "shortfall": 22
+    },
+    "reddit": {
+      "quota": 30,
+      "eligible": 2,
+      "selected": 2,
+      "shortfall": 28
+    },
+    "unseen_group": {
+      "quota": 25,
+      "eligible": 0,
+      "selected": 0,
+      "shortfall": 25
+    },
+    "model_disagreement": {
+      "quota": 30,
+      "eligible": 72,
+      "selected": 30,
+      "shortfall": 0
+    }
+  },
+  "queue_rows": 75,
+  "double_annotation_rows": 11,
+  "seed": 42,
+  "model": {
+    "available": true,
+    "model_name": "logistic",
+    "dataset_hash": "450745418479c703",
+    "threshold": 0.3523235947665243
+  },
+  "label_status": "pending_human_review",
+  "notes": [
+    "No label in this queue is filled in. Rule and model outputs are kept in annotation_queue_provenance.csv and must not be shown to annotators.",
+    "Completed batches are validated with `python -m src.ml.annotation_queue validate`; they are never merged into the labelled corpus automatically.",
+    "Built from the 304-row demo extract because the canonical signal set is absent. This pool is small and YouTube-heavy, so most strata cannot be filled; rebuild from data/processed/signals_scored.csv for the real batch."
+  ]
+}

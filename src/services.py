@@ -27,6 +27,16 @@ FORECAST_REPORT_DIR = Path("reports/forecasting")
 DEMO_FORECAST_REPORT_DIR = Path("reports/demo_forecasting")
 MMM_REPORT_DIR = Path("reports/mmm")
 
+MMM_THINNED_POSTERIOR = "posterior_thinned.npz"
+MMM_REQUIRED_POSTERIOR_KEYS = frozenset(
+    {
+        "baseline", "trend", "beta", "decay", "saturation_alpha", "saturation_theta",
+        "price_coefficient", "promotion_coefficient", "event_coefficient",
+        "season_sin", "season_cos", "sigma", "spend_scale",
+        "price_mean", "sales_mean", "sales_std", "week_mean", "week_scale",
+    }
+)
+
 REGENERATE_FORECAST_HINT = (
     "Run `python scripts/run_forecasting.py --save-posterior` (add --demo for the "
     "sample dataset) to generate the posterior samples this scenario needs."
@@ -175,6 +185,24 @@ def _load_posterior(path: Path, key: str = "draws") -> np.ndarray | None:
         return payload[key] if key in payload else None
 
 
+def _load_run_posterior(full_path: Path, thinned_path: Path, report_dir: Path) -> dict | None:
+    """Full local samples if present, else the committed run-stamped thinned copy.
+
+    The thinned copy is used only when its stamp matches this report's run ID;
+    otherwise it describes a different run and is refused with a clear message.
+    """
+    from src.posterior_store import StalePosteriorError, load_thinned
+
+    if full_path.exists():
+        with np.load(full_path) as payload:
+            return {key: payload[key] for key in payload.files}
+    run_id = _read_json(report_dir / "run_metadata.json").get("run_id")
+    try:
+        return load_thinned(thinned_path, run_id)
+    except StalePosteriorError as exc:
+        raise ArtefactMissingError(f"Posterior samples are stale: {exc}") from exc
+
+
 def behavioural_scenario(
     level_shift: float = 1.0,
     event_pulse: float = 1.0,
@@ -188,7 +216,12 @@ def behavioural_scenario(
     from src.forecasting.scenarios import BehaviouralScenario, run_behavioural_scenario
 
     report_dir = Path(report_dir or resolve_forecast_dir())
-    draws = _load_posterior(report_dir / f"posterior_samples_{target}.npz")
+    payload = _load_run_posterior(
+        report_dir / f"posterior_samples_{target}.npz",
+        report_dir / f"posterior_thinned_{target}.npz",
+        report_dir,
+    )
+    draws = payload.get("draws") if payload else None
     if draws is None:
         raise ArtefactMissingError(
             f"No posterior samples for {target!r} in {report_dir}. {REGENERATE_FORECAST_HINT}"
@@ -262,6 +295,7 @@ def mmm_summary(report_dir: Path | None = None) -> dict:
 def mmm_scenario(
     budget_changes: dict | None = None,
     price_change: float = 0.0,
+    reallocations: list | None = None,
     promotion: bool | None = None,
     event: bool | None = None,
     label: str = "scenario",
@@ -278,14 +312,20 @@ def mmm_scenario(
     from src.mmm.synthetic import CHANNELS, load_synthetic_dataset
 
     report_dir = Path(report_dir or MMM_REPORT_DIR)
-    posterior_path = report_dir / "posterior_samples.npz"
-    if not posterior_path.exists():
+    posterior = _load_run_posterior(
+        report_dir / "posterior_samples.npz", report_dir / MMM_THINNED_POSTERIOR, report_dir
+    )
+    if posterior is None:
         raise ArtefactMissingError(
             f"No MMM posterior samples in {report_dir}. {REGENERATE_MMM_HINT}"
         )
-
-    with np.load(posterior_path) as payload:
-        posterior = {key: payload[key] for key in payload.files}
+    missing = sorted(MMM_REQUIRED_POSTERIOR_KEYS - set(posterior))
+    if missing:
+        # predict_sales would otherwise fall back to defaults for the centring
+        # constants and return plausible-looking but wrong numbers.
+        raise ArtefactMissingError(
+            f"MMM posterior samples in {report_dir} lack {missing}. {REGENERATE_MMM_HINT}"
+        )
 
     data, _truth = load_synthetic_dataset()
     artefacts = load_mmm_artefacts(report_dir)
@@ -314,6 +354,7 @@ def mmm_scenario(
 
     scenario = MarketingScenario(
         budget_changes=budget_changes or {},
+        reallocations=[tuple(item) for item in (reallocations or [])],
         price_change=price_change,
         promotion=promotion,
         event=event,
@@ -333,7 +374,8 @@ def health() -> dict:
             _read_json(forecast_dir / "run_metadata.json").get("sample_only", False)
         ),
         "mmm_results_available": (MMM_REPORT_DIR / "run_metadata.json").exists(),
-        "mmm_posterior_available": (MMM_REPORT_DIR / "posterior_samples.npz").exists(),
+        "mmm_posterior_available": (MMM_REPORT_DIR / "posterior_samples.npz").exists()
+        or (MMM_REPORT_DIR / MMM_THINNED_POSTERIOR).exists(),
     }
 
 

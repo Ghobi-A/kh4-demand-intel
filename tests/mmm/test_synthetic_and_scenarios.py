@@ -166,6 +166,32 @@ def test_budget_reallocation_moves_spend_between_channels() -> None:
     assert "social_spend" in scenario.label and "video_spend" in scenario.label
 
 
+def test_budget_reallocation_is_budget_neutral_when_channels_differ() -> None:
+    """Regression: 0.8x/1.2x multipliers added spend whenever budgets differed."""
+    data = _stub_data()
+    data["video_spend"] = data["video_spend"] * 3.0
+    channels = _StubFit.channels
+    plan = apply_scenario(data, budget_reallocation("social_spend", "video_spend", 0.20), channels)
+
+    assert plan[list(channels)].to_numpy().sum() == pytest.approx(
+        data[list(channels)].to_numpy().sum()
+    )
+    moved = data["social_spend"] * 0.20
+    assert plan["social_spend"].to_numpy() == pytest.approx((data["social_spend"] - moved).to_numpy())
+    assert plan["video_spend"].to_numpy() == pytest.approx((data["video_spend"] + moved).to_numpy())
+
+
+def test_reallocation_rejects_bad_transfers() -> None:
+    channels = _StubFit.channels
+    for transfer in [
+        ("social_spend", "social_spend", 0.2),
+        ("social_spend", "tv_spend", 0.2),
+        ("social_spend", "video_spend", 1.5),
+    ]:
+        with pytest.raises(ValueError):
+            apply_scenario(_stub_data(), MarketingScenario(reallocations=[transfer]), channels)
+
+
 def test_price_promotion_and_event_changes_apply() -> None:
     scenario = MarketingScenario(price_change=-5.0, promotion=True, event=True)
 

@@ -1,0 +1,77 @@
+{
+  "actionable_count": {
+    "available": true,
+    "reference_model": "bayesian",
+    "n_forecasts_per_model": 6,
+    "n_origins": 3,
+    "matched_wape": {
+      "bayesian": 0.9356968085106383,
+      "exponential_smoothing": 0.7906966583654109,
+      "mean": 0.851063829787234,
+      "naive": 0.7872340425531915
+    },
+    "leader": "naive",
+    "runner_up": "exponential_smoothing",
+    "gap_compared_against": "bayesian",
+    "leave_one_origin_out_leaders": {
+      "204": "exponential_smoothing",
+      "206": "naive",
+      "208": "bayesian"
+    },
+    "leader_stable_under_leave_one_out": false,
+    "dominant_origin": 208,
+    "dominant_origin_gap_share": 1.0028662534484611,
+    "fragile": true,
+    "verdict": "6 forecasts over 3 origins per model. Lowest matched WAPE: naive (0.787); bayesian 0.936. The whole absolute-error gap between naive and bayesian comes from origin 208. Without it, WAPE is naive 0.958 vs bayesian 0.958. Leader with each origin left out: drop 204 -> exponential_smoothing, drop 206 -> naive, drop 208 -> bayesian. The ranking is fragile and should be read as anecdotal, not as evidence that one model is better."
+  },
+  "actionable_probability_mass": {
+    "available": true,
+    "reference_model": "bayesian",
+    "n_forecasts_per_model": 6,
+    "n_origins": 3,
+    "matched_wape": {
+      "bayesian": 0.928789961647467,
+      "exponential_smoothing": 0.8271896406488244,
+      "mean": 0.8455555888227005,
+      "naive": 0.8189845565995507
+    },
+    "leader": "naive",
+    "runner_up": "exponential_smoothing",
+    "gap_compared_against": "bayesian",
+    "leave_one_origin_out_leaders": {
+      "204": "naive",
+      "206": "exponential_smoothing",
+      "208": "bayesian"
+    },
+    "leader_stable_under_leave_one_out": false,
+    "dominant_origin": 208,
+    "dominant_origin_gap_share": 1.0068650007584186,
+    "fragile": true,
+    "verdict": "6 forecasts over 3 origins per model. Lowest matched WAPE: naive (0.819); bayesian 0.929. The whole absolute-error gap between naive and bayesian comes from origin 208. Without it, WAPE is naive 0.961 vs bayesian 0.959. Leader with each origin left out: drop 204 -> naive, drop 206 -> exponential_smoothing, drop 208 -> bayesian. The ranking is fragile and should be read as anecdotal, not as evidence that one model is better."
+  },
+  "total_comments": {
+    "available": true,
+    "reference_model": "bayesian",
+    "n_forecasts_per_model": 6,
+    "n_origins": 3,
+    "matched_wape": {
+      "bayesian": 0.9451496062992126,
+      "exponential_smoothing": 0.8142150114442257,
+      "mean": 0.8622047244094488,
+      "naive": 0.8110236220472441
+    },
+    "leader": "naive",
+    "runner_up": "exponential_smoothing",
+    "gap_compared_against": "bayesian",
+    "leave_one_origin_out_leaders": {
+      "204": "naive",
+      "206": "naive",
+      "208": "bayesian"
+    },
+    "leader_stable_under_leave_one_out": false,
+    "dominant_origin": 208,
+    "dominant_origin_gap_share": 1.0018492426910885,
+    "fragile": true,
+    "verdict": "6 forecasts over 3 origins per model. Lowest matched WAPE: naive (0.811); bayesian 0.945. The whole absolute-error gap between naive and bayesian comes from origin 208. Without it, WAPE is naive 0.968 vs bayesian 0.967. Leader with each origin left out: drop 204 -> naive, drop 206 -> naive, drop 208 -> bayesian. The ranking is fragile and should be read as anecdotal, not as evidence that one model is better."
+  }
+}

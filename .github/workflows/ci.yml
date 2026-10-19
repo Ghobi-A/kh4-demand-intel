@@ -45,6 +45,23 @@ jobs:
       - name: Dataset validation smoke test
         run: python -m src.ml.data validate
 
+      - name: Dataset audit and group-aware CV smoke test
+        run: |
+          python -m src.ml.dataset_audit --output-dir /tmp/ci-dq
+          test -f /tmp/ci-dq/dataset_audit.md
+          python -m src.ml.group_cv --models logistic --seeds 42 --bootstrap 50 \
+            --output-dir /tmp/ci-gcv --report /tmp/ci-gcv/report.md
+          test -f /tmp/ci-gcv/summary.json
+
+      - name: Full-data readiness check abstains without canonical data
+        run: |
+          set +e
+          python scripts/check_full_data_readiness.py --output-dir /tmp/ci-ready
+          status=$?
+          set -e
+          test "$status" -eq 2
+          grep -q blocked_missing_input /tmp/ci-ready/full_data_readiness.json
+
       - name: Tiny training + benchmark smoke test
         run: |
           python -m src.ml.benchmark \
@@ -53,6 +70,7 @@ jobs:
             --output /tmp/ci-ml
           test -f /tmp/ci-ml/results_summary.csv
           test -f /tmp/ci-ml/model_comparison.md
+          git diff --exit-code reports/splits  # a smoke run must not touch committed manifests
 
       - name: Temporal dataset smoke test (demo sample)
         run: |

@@ -500,6 +500,7 @@ def run_experiment(
 ) -> dict:
     """Run the full forecasting experiment and write every artefact."""
     config = config or ForecastConfig()
+    run_id = uuid.uuid4().hex[:12]
     report_dir = Path(report_dir or (DEMO_REPORT_DIR if demo else DEFAULT_REPORT_DIR))
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -542,9 +543,18 @@ def run_experiment(
                 tagged.insert(0, "target", target)
                 sink.append(tagged)
 
-        if save_posterior and outcome["bayesian"].get("_draws") is not None:
+        draws = outcome["bayesian"].get("_draws")
+        if draws is not None:
+            # A small run-stamped copy is always written so deployed scenarios
+            # run against this exact run; the full samples stay opt-in.
+            from src.posterior_store import save_thinned
+
+            save_thinned(
+                report_dir / f"posterior_thinned_{target}.npz", {"draws": draws}, run_id
+            )
+        if save_posterior and draws is not None:
             path = report_dir / f"posterior_samples_{target}.npz"
-            np.savez_compressed(path, draws=outcome["bayesian"]["_draws"])
+            np.savez_compressed(path, draws=draws)
             LOGGER.info("Wrote posterior samples to %s", path)
 
     def _write(frames, name):
@@ -556,6 +566,12 @@ def run_experiment(
     _write(all_comparisons, "model_comparison.csv")
     _write(all_forecasts, "forecast.csv")
     _write(all_matched, "model_comparison_matched_origins.csv")
+
+    sensitivity: dict = {}
+    if all_matched and all_backtests:
+        from src.forecasting.sensitivity import write_sensitivity
+
+        sensitivity = write_sensitivity(pd.concat(all_backtests, ignore_index=True), report_dir)
 
     observed_frames = [
         pd.DataFrame(
@@ -594,7 +610,7 @@ def run_experiment(
     (report_dir / "temporal_coverage.json").write_text(json.dumps(coverage, indent=2, default=str))
 
     metadata = {
-        "run_id": uuid.uuid4().hex[:12],
+        "run_id": run_id,
         "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
         "git_commit": _git_commit(),
         "input_path": str(input_path),
@@ -632,12 +648,15 @@ def run_experiment(
             for target, outcome in per_target.items()
         },
         "probability_provenance": dataset.meta.get("probabilities", {}),
+        "matched_origin_sensitivity": sensitivity,
     }
     (report_dir / "run_metadata.json").write_text(json.dumps(metadata, indent=2, default=str))
 
     from src.forecasting.reporting import write_forecast_report
 
-    write_forecast_report(per_target, metadata, dataset, report_dir, demo=demo)
+    write_forecast_report(
+        per_target, metadata, dataset, report_dir, demo=demo, sensitivity=sensitivity
+    )
 
     return {"per_target": per_target, "metadata": metadata, "report_dir": report_dir}
 

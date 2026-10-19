@@ -243,3 +243,24 @@ def test_seed_capped_youtube_manifest_marks_volume_as_not_representative(
     assert meta["evaluation_status"] == "seed_capped_dataset"
     assert meta["youtube_collection"]["seed_capped"] is True
     assert meta["youtube_collection"]["cap_hit_videos"] == 1
+
+
+def test_demo_extract_cannot_be_stamped_as_full_dataset(tmp_path) -> None:
+    """Regression: the stratified extract built without --demo used to be
+    stamped full_dataset / volume_representative = true."""
+    with pytest.raises(ValueError, match="demo extract"):
+        build_temporal_dataset(
+            input_path="data/demo/signals_scored_portfolio.csv",
+            output_path=tmp_path / "weekly.csv",
+            demo=False,
+        )
+    assert not (tmp_path / "weekly.csv").exists()
+
+
+def test_copied_demo_extract_is_caught_by_content_hash(tmp_path) -> None:
+    copy = tmp_path / "renamed_signals.csv"
+    copy.write_bytes(open("data/demo/signals_scored_portfolio.csv", "rb").read())
+    with pytest.raises(ValueError, match="demo extract"):
+        build_temporal_dataset(
+            input_path=copy, output_path=tmp_path / "weekly.csv", demo=False
+        )

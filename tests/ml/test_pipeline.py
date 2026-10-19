@@ -239,3 +239,14 @@ def test_ranking_figures(tmp_path):
     written = save_ranking_figures(y, scores, tmp_path)
     assert len(written) == 4
     assert all(p.exists() for p in written)
+
+
+def test_benchmark_outside_reports_ml_keeps_split_manifests_local(tmp_path) -> None:
+    """Regression: a smoke run with --output elsewhere overwrote reports/splits."""
+    from pathlib import Path
+
+    from src.ml.benchmark import split_manifest_dir
+    from src.ml.splits import DEFAULT_SPLIT_DIR
+
+    assert split_manifest_dir(Path("reports/ml")) == DEFAULT_SPLIT_DIR
+    assert split_manifest_dir(tmp_path / "ci-ml") == tmp_path / "ci-ml" / "splits"

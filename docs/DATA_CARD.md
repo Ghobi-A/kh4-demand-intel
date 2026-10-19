@@ -96,9 +96,30 @@ above: see `docs/MMM_LAB.md`.
 ## Privacy
 
 The portfolio extract strips user-level metadata; usernames are not
-included in labelled data, reports, or the dashboard. Permalinks are
+included in labelled data, reports, or the dashboard. Identifying keys are
+removed from inside the JSON `metadata` column as well as from top-level
+columns, and `tests/test_portfolio_data.py` enforces it. (Until October 2026
+the committed extract carried YouTube display names inside `metadata`; they
+were removed, but remain in git history.) Permalinks are
 retained only to preserve verifiable provenance and group structure of
 public comments.
+
+## Annotation reliability
+
+One annotator (`annotator_1`). The raw audit file keeps a first-pass
+`manual_label` beside the final `corrected_label`: they agree on 56.6% of the
+196 rows with both (Cohen's κ 0.30), most often because a first-pass
+`frustrated_demand` or `nostalgia_reactivation` became `general_discussion`.
+That is a same-annotator revision rate, not inter-annotator agreement. Full
+breakdown: `reports/data_quality/dataset_audit.md` (`python -m src.ml.dataset_audit`).
+
+## Expanding the corpus
+
+`python -m src.ml.annotation_queue build` writes a stratified, blind queue
+(random control, rare-class candidates, Reddit, unseen groups, rule/model
+disagreement) with provenance in a separate file and a 15% double-annotation
+overlap. It never writes a label. Completed batches are QC-checked with
+`validate` and kept as `human_reviewed_unmerged` until a reviewed merge.
 
 ## Limitations
 

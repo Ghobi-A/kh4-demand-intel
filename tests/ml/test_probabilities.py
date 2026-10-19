@@ -231,3 +231,27 @@ def test_rows_marked_unavailable_or_excluded_never_carry_a_probability() -> None
     for source in (SOURCE_EXCLUDED, SOURCE_UNAVAILABLE):
         subset = scored[scored[PROVENANCE_COLUMN] == source]
         assert subset[PROBABILITY_COLUMN].isna().all()
+
+
+def test_logistic_stage1_is_platt_scaled_on_validation_by_default() -> None:
+    """Regression: logistic probabilities used to skip validation calibration."""
+    from src.ml.benchmark import train_stage1
+    from src.ml.config import ExperimentConfig
+    from src.ml.splits import group_split
+
+    split = group_split(make_fixture_frame(groups_per_class=4), seed=42)
+    _, calibrator, _, _ = train_stage1("logistic", split, ExperimentConfig(), seed=42)
+    assert calibrator is not None
+
+    off = ExperimentConfig(calibrate_probability_outputs=False)
+    _, calibrator_off, _, _ = train_stage1("logistic", split, off, seed=42)
+    assert calibrator_off is None
+
+
+def test_pre_fix_uncalibrated_logistic_artefact_is_not_trusted() -> None:
+    from src.ml.probabilities import _is_compatible
+
+    base = {"stage2_classes": ["high_intent"], "stage1_score_type": "probability"}
+    assert not _is_compatible({**base, "calibrated": False})
+    assert _is_compatible({**base, "calibrated": True})
+    assert _is_compatible({**base, "calibrated": False, "calibrate_probability_outputs": False})

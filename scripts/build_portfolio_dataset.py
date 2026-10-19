@@ -6,6 +6,7 @@ fabricate replacement rows when that dataset is absent.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,18 @@ IDENTIFYING_COLUMNS = {
     "username",
     "user",
     "channel_id",
+}
+# Keys inside the JSON ``metadata`` column that identify a commenter. Dropping
+# top-level columns alone is not enough: the YouTube scraper nests the author's
+# display name in this column.
+IDENTIFYING_METADATA_KEYS = {
+    "author",
+    "author_display_name",
+    "author_channel_id",
+    "author_channel_url",
+    "author_profile_image_url",
+    "username",
+    "user",
 }
 INTENT_CLASSES = [
     "high_intent",
@@ -52,9 +65,27 @@ def _fail_if_missing_input() -> None:
     )
 
 
+def _strip_identifying_metadata(value):
+    """Remove commenter-identifying keys from one JSON ``metadata`` cell."""
+    if not isinstance(value, str) or not value.strip():
+        return value
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return value
+    if not isinstance(payload, dict):
+        return value
+    cleaned = {k: v for k, v in payload.items() if k not in IDENTIFYING_METADATA_KEYS}
+    return json.dumps(cleaned, ensure_ascii=False)
+
+
 def _strip_identifying_columns(df: pd.DataFrame) -> pd.DataFrame:
     columns_to_drop = sorted(IDENTIFYING_COLUMNS.intersection(df.columns))
-    return df.drop(columns=columns_to_drop)
+    stripped = df.drop(columns=columns_to_drop)
+    if "metadata" in stripped.columns:
+        stripped = stripped.copy()
+        stripped["metadata"] = stripped["metadata"].map(_strip_identifying_metadata)
+    return stripped
 
 
 def _sample_by_intent(df: pd.DataFrame) -> pd.DataFrame:

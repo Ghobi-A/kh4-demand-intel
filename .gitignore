@@ -48,3 +48,6 @@ htmlcov/
 # Posterior samples are large and go stale; regenerate them locally with
 # `--save-posterior` on scripts/run_forecasting.py or scripts/run_mmm.py
 *.npz
+# ...except the small run-stamped thinned copies (src/posterior_store.py), which
+# let the deployed dashboard and API run scenarios against the committed run.
+!reports/**/posterior_thinned*.npz

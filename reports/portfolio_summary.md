@@ -30,6 +30,25 @@ Headline observations from the current development run:
   split variance — exactly why the corpus must be expanded before any
   number is quoted.
 
+## Group-aware cross-validation (preliminary)
+
+Every one of the 200 rows scored out of fold, whole discussion groups per
+fold (`reports/ml/group_cv_report.md`): Stage 1 PR-AUC 0.65 (group-bootstrap
+95%: 0.55–0.77) against a 0.30 base rate, and Lift@10% 2.5 (2.1–3.3), for the
+word+char SVM. Still development evaluation on the rows the models were built
+around; not a CV-ready metric.
+
+## Defensible portfolio claims today
+
+- Group-aware, leakage-tested NLP evaluation with honest uncertainty, showing
+  that ranking beats random review and intent-level classification does not yet work.
+- Model-selection discipline in forecasting: a naive baseline is kept as the
+  lowest-error option, no model is recommended, and a sensitivity analysis
+  shows the ranking rests on one origin of a demo sample.
+- A synthetic MMM used to *diagnose* identifiability (channel swap,
+  under-attribution, no effect from a budget-neutral reallocation), never to
+  claim ROI.
+
 ## FINAL CV METRICS
 
 **Pending final re-audit and frozen held-out test evaluation.**

@@ -1,8 +1,8 @@
 {
-  "run_id": "f1921ed69f29",
+  "run_id": "5fe6da075b1f",
   "experiment_name": "tfidf_group_holdout",
-  "timestamp": "2026-07-18T17:38:39.543911+00:00",
-  "git_commit": "886e6f6",
+  "timestamp": "2026-10-17T00:16:23.072831+00:00",
+  "git_commit": "ca7fca9",
   "dataset_hash": "450745418479c703",
   "annotation_version": "audit_v1_2025",
   "row_count": 200,
@@ -70,6 +70,7 @@
       "min_recall": null
     },
     "calibration_method": "sigmoid",
+    "calibrate_probability_outputs": true,
     "ranking_percentages": [
       0.05,
       0.1,

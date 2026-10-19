@@ -40,7 +40,13 @@ from src.ml.hierarchy import ACTIONABLE, HierarchicalClassifier, to_binary_label
 from src.ml.metrics import binary_metrics, multiclass_metrics
 from src.ml.models import SCORE_PROBABILITY, build_model
 from src.ml.ranking import ranking_metrics, save_ranking_figures
-from src.ml.splits import SplitResult, check_leakage, group_split, save_split_manifests
+from src.ml.splits import (
+    DEFAULT_SPLIT_DIR,
+    SplitResult,
+    check_leakage,
+    group_split,
+    save_split_manifests,
+)
 from src.ml.thresholds import select_threshold
 
 SUMMARY_METRICS = [
@@ -72,6 +78,18 @@ def _git_commit() -> str:
         return "unknown"
 
 
+def split_manifest_dir(output_dir: Path) -> Path:
+    """Where split manifests go for a benchmark writing to ``output_dir``.
+
+    The canonical run (``reports/ml``) keeps the committed ``reports/splits``
+    location; any other output directory gets its own ``splits/`` folder, so a
+    smoke run elsewhere never overwrites the committed manifests.
+    """
+    if Path(output_dir).resolve() == Path(ExperimentConfig().output_dir).resolve():
+        return DEFAULT_SPLIT_DIR
+    return Path(output_dir) / "splits"
+
+
 def train_stage1(model_name: str, split: SplitResult, config: ExperimentConfig, seed: int):
     """Train, calibrate (validation only), and threshold a Stage 1 model.
 
@@ -95,7 +113,11 @@ def train_stage1(model_name: str, split: SplitResult, config: ExperimentConfig, 
     calibrator = None
     threshold_info = {"selected_threshold": 0.5, "selection_metric": "default", "validation_score": None}
     if val_scores is not None:
-        if model.score_type != SCORE_PROBABILITY or config.calibration_method == "isotonic":
+        if (
+            model.score_type != SCORE_PROBABILITY
+            or config.calibration_method == "isotonic"
+            or config.calibrate_probability_outputs
+        ):
             try:
                 calibrator = ScoreCalibrator(method=config.calibration_method).fit(
                     val_scores, val_binary
@@ -295,7 +317,7 @@ def run_benchmark(config: ExperimentConfig) -> dict:
         if leaks:
             raise RuntimeError(f"Split leakage detected for seed {seed}: {leaks}")
         if seed == config.seeds[0]:
-            save_split_manifests(split, Path("reports/splits"))
+            save_split_manifests(split, split_manifest_dir(output_dir))
             reference_split = split
         for model_name in config.models:
             row, predictions, extras = evaluate_model_on_seed(model_name, split, config, seed)
