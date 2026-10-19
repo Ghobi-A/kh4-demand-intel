@@ -211,6 +211,11 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
     args = _build_parser().parse_args()
+    if not Path(args.input).exists():
+        raise SystemExit(
+            f"Input not found: {args.input}. Build it first with "
+            "`python scripts/run_pipeline.py`; nothing is enriched without it."
+        )
     run_enrichment(args.input, args.output, args.enrichment_record, args.allow_pullpush)
 
 

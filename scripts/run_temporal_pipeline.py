@@ -29,7 +29,11 @@ LOGGER = logging.getLogger(__name__)
 
 def _run(command: list[str]) -> None:
     LOGGER.info("Running: %s", " ".join(command))
-    subprocess.run(command, check=True)
+    result = subprocess.run(command)
+    if result.returncode:
+        # The step has already printed why it stopped; exit with its status
+        # instead of adding a CalledProcessError traceback on top.
+        raise SystemExit(result.returncode)
 
 
 def build_parser() -> argparse.ArgumentParser:
