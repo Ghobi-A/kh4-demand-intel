@@ -12,12 +12,17 @@ from src.posterior_store import StalePosteriorError, load_thinned, save_thinned,
 
 
 def test_thinning_keeps_evenly_spaced_draws_and_whole_non_draw_arrays() -> None:
-    arrays = {"beta": np.arange(4000 * 3, dtype=float).reshape(4000, 3), "spend_scale": np.ones(3)}
+    arrays = {
+        "beta": np.arange(4000 * 3, dtype=float).reshape(4000, 3),
+        "spend_scale": np.ones(3),
+        "price_mean": np.asarray(60.4230461),
+    }
     thinned, total = thin_draws(arrays, max_draws=1000)
     assert total == 4000
     assert thinned["beta"].shape == (1000, 3)
     assert thinned["beta"].dtype == np.float32
     assert thinned["spend_scale"].shape == (3,)
+    assert thinned["price_mean"].dtype == np.float64
     np.testing.assert_allclose(thinned["beta"][1], arrays["beta"][4])
 
 
@@ -61,3 +66,20 @@ def test_committed_thinned_posteriors_match_their_reports() -> None:
     ]:
         run_id = json.loads((report_dir / "run_metadata.json").read_text())["run_id"]
         assert load_thinned(report_dir / name, run_id), report_dir
+
+
+def test_committed_mmm_posterior_runs_a_budget_neutral_scenario() -> None:
+    """Regression: saved MMM samples dropped the scalar centring constants."""
+    result = services.mmm_scenario(reallocations=[("social_spend", "video_spend", 0.2)])
+    assert result["data_type"] == "synthetic"
+    assert abs(result["spend_change"]) < 1e-6
+    # Matches the committed report's scenario to within Monte Carlo error.
+    committed = json.loads((services.MMM_REPORT_DIR / "scenario_example.json").read_text())
+    assert abs(result["baseline_expected_sales"] - committed["baseline_expected_sales"]) < 0.01 * committed["baseline_expected_sales"]
+
+
+def test_mmm_posterior_missing_centring_constants_is_refused(tmp_path) -> None:
+    (tmp_path / "run_metadata.json").write_text(json.dumps({"run_id": "r1"}))
+    save_thinned(tmp_path / services.MMM_THINNED_POSTERIOR, {"baseline": np.zeros(5)}, run_id="r1")
+    with pytest.raises(services.ArtefactMissingError, match="lack"):
+        services.mmm_scenario(report_dir=tmp_path)

@@ -28,6 +28,14 @@ DEMO_FORECAST_REPORT_DIR = Path("reports/demo_forecasting")
 MMM_REPORT_DIR = Path("reports/mmm")
 
 MMM_THINNED_POSTERIOR = "posterior_thinned.npz"
+MMM_REQUIRED_POSTERIOR_KEYS = frozenset(
+    {
+        "baseline", "trend", "beta", "decay", "saturation_alpha", "saturation_theta",
+        "price_coefficient", "promotion_coefficient", "event_coefficient",
+        "season_sin", "season_cos", "sigma", "spend_scale",
+        "price_mean", "sales_mean", "sales_std", "week_mean", "week_scale",
+    }
+)
 
 REGENERATE_FORECAST_HINT = (
     "Run `python scripts/run_forecasting.py --save-posterior` (add --demo for the "
@@ -310,6 +318,13 @@ def mmm_scenario(
     if posterior is None:
         raise ArtefactMissingError(
             f"No MMM posterior samples in {report_dir}. {REGENERATE_MMM_HINT}"
+        )
+    missing = sorted(MMM_REQUIRED_POSTERIOR_KEYS - set(posterior))
+    if missing:
+        # predict_sales would otherwise fall back to defaults for the centring
+        # constants and return plausible-looking but wrong numbers.
+        raise ArtefactMissingError(
+            f"MMM posterior samples in {report_dir} lack {missing}. {REGENERATE_MMM_HINT}"
         )
 
     data, _truth = load_synthetic_dataset()

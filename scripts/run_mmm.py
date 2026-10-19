@@ -130,8 +130,14 @@ def main() -> None:
     }
     (report_dir / "run_metadata.json").write_text(json.dumps(metadata, indent=2, default=str))
 
+    # Scalar centring constants (price_mean, week_mean, ...) are part of the
+    # posterior payload: predict_sales needs them to put a plan on the model's
+    # scale. Saving only ndarray values dropped them, so saved samples could
+    # not run a scenario.
     posterior_arrays = {
-        key: value for key, value in fit.posterior.items() if isinstance(value, np.ndarray)
+        key: np.asarray(value)
+        for key, value in fit.posterior.items()
+        if isinstance(value, (np.ndarray, float, int, np.floating, np.integer))
     }
     # Always write the small run-stamped copy, so a deployed dashboard can run
     # scenarios against exactly this fit without the git-ignored full samples.

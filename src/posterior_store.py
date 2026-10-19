@@ -41,8 +41,10 @@ def thin_draws(arrays: dict[str, np.ndarray], max_draws: int = MAX_DRAWS) -> tup
         value = np.asarray(value)
         if value.ndim >= 1 and value.shape[0] == total and total > 1:
             value = value[::step]
-        if np.issubdtype(value.dtype, np.floating):
-            value = value.astype(np.float32)
+            # Draws tolerate float32; scalar constants (centring means, scales)
+            # are kept at full precision.
+            if np.issubdtype(value.dtype, np.floating):
+                value = value.astype(np.float32)
         thinned[key] = value
     return thinned, total
 
