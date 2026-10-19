@@ -6,6 +6,8 @@ separately labelled synthetic Marketing Mix Modelling experiment.**
 
 **Live dashboard:** https://kh4-demand-intel.streamlit.app
 
+![Dashboard Overview tab: status of each component, what the data is, and the findings ranked by how far they can be trusted](docs/images/dashboard_overview.png)
+
 **Model status: Development / preliminary evaluation** — the labelled
 audit corpus is still undergoing expansion and re-audit, so all
 supervised-model results are preliminary development benchmarks, not
@@ -73,8 +75,8 @@ The evidence, its severity-ranked defects and what is blocked are in
 Ordered from most to least defensible. All numbers regenerate from the files cited.
 
 **1. Sentiment is not behavioural intent.** In the human-labelled corpus, 98 of 134
-VADER-positive comments (73%) are non-actionable discussion, while 16 of 41 negative
-comments (39%) carry an actionable signal such as frustrated demand or a confusion
+VADER-positive comments (73%) are non-actionable discussion, while 17 of 41 negative
+comments (41%) carry an actionable signal such as frustrated demand or a confusion
 barrier. (200 rows sampled around rule behaviour; one annotator.)
 
 **2. Actionable-signal ranking beats random review, with wide uncertainty.** Under

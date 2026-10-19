@@ -94,6 +94,25 @@ Bayesian 0.929 WAPE on 6 matched forecasts; leave out origin 208 and the two tie
 is about half the observed sd, so it understates spikes. **No model is reliable on this
 history, and none is recommended.**
 
+## End-to-end pass (2026-10-19)
+
+A fresh clone of the PR branch, installed on Python 3.12 exactly as the README says,
+with every README command run as written, the dashboard driven in a headless browser,
+the API exercised, and the dashboard tested on a `requirements.txt`-only install (what
+Streamlit Community Cloud uses).
+
+| ID | Sev | Status | Finding | Fix |
+|---|---|---|---|---|
+| E1 | P1 | Verified, open | **Both Scenario Planner modes and both scenario API endpoints are dead in a deployed checkout.** They need posterior samples (`*.npz`), which are git-ignored, so a visitor clicking *Run* gets "run `scripts/run_mmm.py --save-posterior`" (HTTP 409 from the API). | Needs a decision: commit thinned, run-stamped posterior samples, or hide the run buttons when no samples exist. |
+| E2 | P1 | Verified, open | **Live Inference uses the rule baseline on a deployed checkout**, because `artifacts/` is git-ignored. The tab says it shows a trained development model; the output says `model_name: rules`. | Needs a decision: commit the small logistic artefact, train it once per session from the committed corpus (about 1 s), or relabel the tab. |
+| E3 | P1 | Verified, fixed | **A deprecation time bomb.** All 12 tables used `use_container_width`, which Streamlit flags for removal after 2025-12-31, and the requirement allowed any `streamlit<2`. | Switched to `width="stretch"`; floor raised to `streamlit>=1.50` (tested on 1.50.0 and 1.66.0). |
+| E4 | P2 | Verified, fixed | **A wrong number in the README:** "16 of 41 (39%)" negative comments actionable; the corpus and the dashboard both give 17 of 41 (41%). Every other quoted number was re-checked against its artefact and matches. | Corrected. |
+| E5 | P2 | Verified, fixed | **A stale committed artefact:** `reports/annotation/active_learning_queue.csv` was generated with the pre-calibration model, so a fresh run changed it. All other committed ML reports regenerate exactly (only timestamps and run IDs differ). | Regenerated; it is byte-identical to a fresh-clone run. |
+| E6 | P2 | Verified, fixed | **First impression:** the header still read "a lightweight portfolio dashboard … heuristic demand signals", and the Demand tab's filters sat in the sidebar on every tab, doing nothing outside that tab. | New header text; filters moved into the Demand Intelligence tab. A README screenshot was added, since the live link is not public. |
+| E7 | P3 | Verified, fixed | `run_temporal_pipeline.py` and `enrich_timestamps` showed raw tracebacks on missing input. | Clean abstention messages. |
+| E8 | P2 | Verified, open | **The Events tab is always empty in deployment**, because it reads git-ignored `data/processed/` outputs. | Hide it until outputs exist, or commit the (text-free) event deltas table. |
+| F9 | P1 | Re-verified, open | The live URL still redirects anonymous visitors to Streamlit sign-in (HTTP 303). | Owner: check the app's sharing settings in Streamlit Community Cloud. |
+
 ## Reproducible commands
 
 ```bash
