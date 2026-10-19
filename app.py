@@ -395,10 +395,21 @@ def render_drift_tab() -> None:
     )
 
 
+def _events_paths() -> tuple[Path, Path]:
+    return (
+        Path(os.getenv("EVENTS_SIGNALS_PATH", "data/processed/signals_events.csv")),
+        Path(os.getenv("EVENT_DELTAS_PATH", "reports/tables/event_sentiment_deltas.csv")),
+    )
+
+
+def events_outputs_available() -> bool:
+    """True when the locally generated event-relative outputs exist."""
+    return all(path.exists() for path in _events_paths())
+
+
 def render_events_tab() -> None:
     st.header("Event-relative sentiment")
-    events_signals_path = Path(os.getenv("EVENTS_SIGNALS_PATH", "data/processed/signals_events.csv"))
-    deltas_path = Path(os.getenv("EVENT_DELTAS_PATH", "reports/tables/event_sentiment_deltas.csv"))
+    events_signals_path, deltas_path = _events_paths()
 
     missing = [path for path in [events_signals_path, deltas_path] if not path.exists()]
     if missing:
@@ -450,6 +461,26 @@ def render_live_inference_tab() -> None:
         "Development model trained on a limited manually labelled portfolio "
         "dataset. Outputs are illustrative, not production predictions."
     )
+    from src.ml.inference import ensure_live_model
+
+    model_dir, model_info = ensure_live_model()
+    if model_dir is None:
+        st.info(
+            "No trained model could be loaded or trained here, so the rule baseline "
+            f"is used ({model_info.get('error')}). Its confidence indicator is not a "
+            "probability."
+        )
+    else:
+        origin = (
+            "trained when this app started, from the committed 200-row labelled corpus"
+            if model_info["source"] == "trained_this_session"
+            else "loaded from the persisted training artefact"
+        )
+        st.caption(
+            f"Two-stage `{model_info['model_name']}` model, {origin} "
+            f"(seed {model_info['seed']}, dataset hash `{model_info['dataset_hash']}`, "
+            f"status `{model_info['evaluation_status']}`)."
+        )
     text = st.text_area(
         "Enter a comment to classify",
         value="Still waiting for news, Square please give us something",
@@ -462,7 +493,7 @@ def render_live_inference_tab() -> None:
     from src.score import INTENT_WEIGHTS, SENTIMENT_WEIGHTS
     from src.sentiment import label_from_compound
 
-    result = predict_text(text)
+    result = predict_text(text, artifact_dir=model_dir) if model_dir else predict_text(text)
     compound = SentimentIntensityAnalyzer().polarity_scores(str(text))["compound"]
     sentiment_label = label_from_compound(compound)
     intent_label = result["intent_label"]
@@ -1099,37 +1130,26 @@ def main() -> None:
     render_header()
     st.caption(f"Model status: {model_status()}")
 
-    tabs = st.tabs(
-        [
-            "Overview",
-            "Demand Intelligence",
-            "Model Performance",
-            "Model Comparison",
-            "Error Analysis",
-            "Drift",
-            "Events",
-            "Forecasting",
-            "Forecast Monitoring",
-            "Marketing Science Lab",
-            "Scenario Planner",
-            "Live Inference",
-        ]
-    )
-
-    renderers = [
-        render_overview_tab,
-        _render_demand_intelligence,
-        render_model_performance_tab,
-        render_model_comparison_tab,
-        render_error_analysis_tab,
-        render_drift_tab,
-        render_events_tab,
-        render_forecasting_tab,
-        render_forecast_monitoring_tab,
-        render_marketing_lab_tab,
-        render_scenario_planner_tab,
-        render_live_inference_tab,
+    pages = [
+        ("Overview", render_overview_tab),
+        ("Demand Intelligence", _render_demand_intelligence),
+        ("Model Performance", render_model_performance_tab),
+        ("Model Comparison", render_model_comparison_tab),
+        ("Error Analysis", render_error_analysis_tab),
+        ("Drift", render_drift_tab),
+        ("Events", render_events_tab),
+        ("Forecasting", render_forecasting_tab),
+        ("Forecast Monitoring", render_forecast_monitoring_tab),
+        ("Marketing Science Lab", render_marketing_lab_tab),
+        ("Scenario Planner", render_scenario_planner_tab),
+        ("Live Inference", render_live_inference_tab),
     ]
+    if not events_outputs_available():
+        # Its inputs come from the local full pipeline and are not committed, so
+        # in a deployed checkout the tab could only say "nothing here yet".
+        pages = [page for page in pages if page[0] != "Events"]
+    tabs = st.tabs([name for name, _ in pages])
+    renderers = [renderer for _, renderer in pages]
     for tab, renderer in zip(tabs, renderers):
         with tab:
             try:
