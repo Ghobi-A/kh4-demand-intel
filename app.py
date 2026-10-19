@@ -120,9 +120,10 @@ def render_header() -> None:
     """Render title and project framing."""
     st.title("Kingdom Hearts IV Demand Intelligence")
     st.write(
-        "A lightweight portfolio dashboard for exploring Reddit and YouTube "
-        "community discussion around Kingdom Hearts IV as sentiment, intent, "
-        "activation, risk, and heuristic demand signals."
+        "Behavioural-intent NLP, demand-proxy forecasting and a synthetic "
+        "marketing-mix experiment built on public Reddit and YouTube discussion "
+        "of Kingdom Hearts IV. Start with the Overview tab: it shows what each "
+        "result is based on and how far it can be trusted."
     )
     with st.expander("About this project", expanded=False):
         st.markdown(
@@ -142,15 +143,23 @@ def render_header() -> None:
         )
 
 
-def render_sidebar_filters(signals_df: pd.DataFrame) -> dict[str, list[str]]:
-    """Render optional sidebar filters and return selected values."""
-    st.sidebar.header("Filters")
-    filters: dict[str, list[str]] = {}
+def render_demand_filters(signals_df: pd.DataFrame) -> dict[str, list[str]]:
+    """Render the Demand Intelligence filters and return selected values.
 
-    for column in ["source", "intent_label", "sentiment_label", "parent_id"]:
+    They sit inside the tab rather than the sidebar: the sidebar is shared by
+    every tab, where these filters would appear but do nothing.
+    """
+    filters: dict[str, list[str]] = {}
+    columns = [c for c in ["source", "intent_label", "sentiment_label", "parent_id"]
+               if sorted_unique_values(signals_df, c)]
+    if not columns:
+        return filters
+    with st.expander("Filters", expanded=False):
+        slots = st.columns(len(columns))
+    for slot, column in zip(slots, columns):
         values = sorted_unique_values(signals_df, column)
         if values:
-            filters[column] = st.sidebar.multiselect(
+            filters[column] = slot.multiselect(
                 label=column,
                 options=values,
                 default=[],
@@ -228,20 +237,20 @@ def render_tables(filtered_df: pd.DataFrame, video_scores_df: pd.DataFrame) -> N
     st.subheader("Top 25 highest demand rows")
     st.dataframe(
         filtered_df.sort_values("demand_score", ascending=False).head(25),
-        use_container_width=True,
+        width="stretch",
     )
 
     st.subheader("Top 25 risk rows")
     risk_rows = filtered_df[filtered_df["risk_score"] > 0]
     st.dataframe(
         risk_rows.sort_values("demand_score", ascending=False).head(25),
-        use_container_width=True,
+        width="stretch",
     )
 
     st.subheader("Video-level score table")
     st.dataframe(
         video_scores_df.sort_values("mean_demand_score", ascending=False),
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -285,7 +294,7 @@ def _show_markdown_report(path: Path, missing_hint: str) -> bool:
 
 def render_demand_tab(signals_df: pd.DataFrame, video_scores_df: pd.DataFrame) -> None:
     """Original demand-intelligence dashboard content."""
-    filters = render_sidebar_filters(signals_df)
+    filters = render_demand_filters(signals_df)
     filtered_df = filter_dataframe(signals_df, filters)
 
     if filtered_df.empty:
@@ -332,7 +341,7 @@ def render_model_performance_tab() -> None:
         if column in summary.columns
     ]
     st.subheader("Benchmark summary (mean over seeds)")
-    st.dataframe(summary[headline_columns], use_container_width=True)
+    st.dataframe(summary[headline_columns], width="stretch")
 
     figure_columns = st.columns(2)
     calibration_path = ML_REPORT_DIR / "figures" / "calibration_stage1.png"
@@ -372,7 +381,7 @@ def render_error_analysis_tab() -> None:
         if path.exists():
             frame = pd.read_csv(path)
             st.subheader(f"{title} ({len(frame)})")
-            st.dataframe(frame, use_container_width=True)
+            st.dataframe(frame, width="stretch")
             shown = True
     if not shown:
         st.info("No error exports yet. Run `python -m src.ml.error_analysis`.")
@@ -408,7 +417,7 @@ def render_events_tab() -> None:
         "`delta_vs_prev_window` shows the mean VADER compound shift between "
         "consecutive windows."
     )
-    st.dataframe(deltas, use_container_width=True)
+    st.dataframe(deltas, width="stretch")
 
     if "mean_vader_compound" in deltas.columns:
         st.bar_chart(deltas.set_index("event_window")["mean_vader_compound"])
@@ -576,7 +585,7 @@ def render_forecasting_tab() -> None:
             st.subheader("Forecast with interval")
             st.dataframe(
                 rows[["period_start", "horizon_step", "forecast", "lower", "upper"]],
-                use_container_width=True,
+                width="stretch",
             )
             chart_frame = rows.set_index("horizon_step")[["forecast", "lower", "upper"]]
             st.line_chart(chart_frame)
@@ -591,7 +600,7 @@ def render_forecasting_tab() -> None:
         subset = artefacts.comparison
         if "target" in subset.columns:
             subset = subset[subset["target"] == target]
-        st.dataframe(subset, use_container_width=True)
+        st.dataframe(subset, width="stretch")
 
     for reason in details.get("selection_reasoning") or []:
         st.markdown(f"- {reason}")
@@ -679,7 +688,7 @@ def render_forecast_monitoring_tab() -> None:
             st.success("No persistent directional bias detected at the configured thresholds.")
 
     with st.expander("Monitoring table", expanded=False):
-        st.dataframe(rows, use_container_width=True)
+        st.dataframe(rows, width="stretch")
 
 
 def render_marketing_lab_tab() -> None:
@@ -715,7 +724,7 @@ def render_marketing_lab_tab() -> None:
     contributions = artefacts["contributions"]
     if not contributions.empty:
         st.subheader("Posterior channel contribution (simulated sales)")
-        st.dataframe(contributions, use_container_width=True)
+        st.dataframe(contributions, width="stretch")
         st.bar_chart(contributions.set_index("channel")["contribution_mean"])
         st.caption(
             "Credible intervals on contribution are wide and overlapping. Point "
@@ -736,7 +745,7 @@ def render_marketing_lab_tab() -> None:
     recovery = artefacts["recovery"]
     if not recovery.empty:
         st.subheader("Recovery against known ground truth")
-        st.dataframe(recovery, use_container_width=True)
+        st.dataframe(recovery, width="stretch")
 
     diagnostics = metadata.get("diagnostics_summary", {})
     if diagnostics:
@@ -811,7 +820,7 @@ def render_scenario_planner_tab() -> None:
                         "difference": result["difference_mean"],
                     }
                 ),
-                use_container_width=True,
+                width="stretch",
             )
             for warning in result.get("warnings", []):
                 st.warning(warning)
