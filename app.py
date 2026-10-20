@@ -358,14 +358,22 @@ def render_model_performance_tab() -> None:
 
 def render_model_comparison_tab() -> None:
     st.header("Model comparison")
+    # The paired, group-held-out comparison is the evidence the README and case
+    # study cite, so it leads; the older per-split benchmark sits below it.
     _show_markdown_report(
-        ML_REPORT_DIR / "model_comparison.md",
-        "No model-comparison report yet. Run `python -m src.ml.benchmark`.",
+        ML_REPORT_DIR / "evaluation_report.md",
+        "No paired evaluation report yet. Run `python -m src.ml.model_comparison`.",
     )
-    _show_markdown_report(
-        ML_REPORT_DIR / "rule_model_comparison.md",
-        "No rule-vs-model report yet. Run `python -m src.ml.error_analysis`.",
-    )
+    with st.expander("Repeated group-holdout benchmark (per-split view)"):
+        _show_markdown_report(
+            ML_REPORT_DIR / "model_comparison.md",
+            "No benchmark report yet. Run `python -m src.ml.benchmark`.",
+        )
+    with st.expander("Rule vs model disagreements"):
+        _show_markdown_report(
+            ML_REPORT_DIR / "rule_model_comparison.md",
+            "No rule-vs-model report yet. Run `python -m src.ml.error_analysis`.",
+        )
 
 
 def render_error_analysis_tab() -> None:
@@ -454,6 +462,30 @@ def render_events_tab() -> None:
     st.scatter_chart(subset, x="days_since_event", y="vader_compound", color="event_window")
 
 
+def inference_method(model_dir, model_info: dict) -> tuple[str, str]:
+    """(kind, sentence) naming the method Live Inference is using right now."""
+    if model_dir is None:
+        return (
+            "rules",
+            "**Active inference method: regex rule baseline (fallback).** No trained "
+            "model could be loaded or trained here "
+            f"({model_info.get('error', 'unknown reason')}). Its 0.7/0.3 confidence "
+            "indicator is not a probability.",
+        )
+    origin = (
+        "trained when this app started from the committed 200-row labelled corpus"
+        if model_info.get("source") == "trained_this_session"
+        else "loaded from the persisted training artefact"
+    )
+    return (
+        "supervised",
+        f"**Active inference method: supervised two-stage `{model_info.get('model_name')}` "
+        f"classifier** with calibrated P(actionable), {origin} (seed "
+        f"{model_info.get('seed')}, dataset hash `{model_info.get('dataset_hash')}`, "
+        f"status `{model_info.get('evaluation_status')}`).",
+    )
+
+
 def render_live_inference_tab() -> None:
     st.header("Live inference")
     st.caption(f"Model status: {model_status()}")
@@ -464,23 +496,8 @@ def render_live_inference_tab() -> None:
     from src.ml.inference import ensure_live_model
 
     model_dir, model_info = ensure_live_model()
-    if model_dir is None:
-        st.info(
-            "No trained model could be loaded or trained here, so the rule baseline "
-            f"is used ({model_info.get('error')}). Its confidence indicator is not a "
-            "probability."
-        )
-    else:
-        origin = (
-            "trained when this app started, from the committed 200-row labelled corpus"
-            if model_info["source"] == "trained_this_session"
-            else "loaded from the persisted training artefact"
-        )
-        st.caption(
-            f"Two-stage `{model_info['model_name']}` model, {origin} "
-            f"(seed {model_info['seed']}, dataset hash `{model_info['dataset_hash']}`, "
-            f"status `{model_info['evaluation_status']}`)."
-        )
+    kind, sentence = inference_method(model_dir, model_info)
+    (st.success if kind == "supervised" else st.warning)(sentence)
     text = st.text_area(
         "Enter a comment to classify",
         value="Still waiting for news, Square please give us something",
@@ -501,6 +518,11 @@ def render_live_inference_tab() -> None:
         sentiment_label, 0.0
     )
 
+    used_rules = result.get("model_name") == "rules"
+    st.caption(
+        f"Classified by `{result.get('model_name')}`"
+        + (" (rule baseline: no probability)" if used_rules else " (supervised model)")
+    )
     columns = st.columns(3)
     if "actionable_probability" in result:
         columns[0].metric("Actionable probability", f"{result['actionable_probability']:.2f}")
