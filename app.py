@@ -959,6 +959,18 @@ def overview_data() -> dict:
             "lift_95": interval.get("lift_at_10pct"),
             "base_rate": float(means.loc[best, "base_rate"]),
         }
+        pairs_path = ML_REPORT_DIR / "model_comparison" / "paired_differences.csv"
+        if pairs_path.exists():
+            pairs = pd.read_csv(pairs_path)
+            versus_rules = pairs[
+                (pairs["versus"] == "rules") & (pairs["metric"] == "pr_auc")
+                & (pairs["model"] != "majority")
+            ]
+            ranking["supervised_beating_rules"] = int(
+                versus_rules["verdict"].str.endswith("better (interval excludes 0)")
+                .where(~versus_rules["verdict"].str.startswith("rules"), False).sum()
+            )
+            ranking["supervised_compared_with_rules"] = int(len(versus_rules))
 
     forecast_dir = FULL_FORECAST_DIR if (FULL_FORECAST_DIR / "run_metadata.json").exists() else DEMO_FORECAST_DIR
     forecast_meta = _read_json_file(forecast_dir / "run_metadata.json")
@@ -1059,6 +1071,15 @@ def render_overview_tab() -> None:
             f"Out-of-fold, group-held-out PR-AUC {ranking['pr_auc']:.2f}{_ci(ranking['pr_auc_95'])} "
             f"against a base rate of {ranking['base_rate']:.2f}; Lift@10% "
             f"{ranking['lift_at_10pct']:.1f}{_ci(ranking['lift_95'])} ({ranking['model']})."
+            + (
+                f" Against the regex rule baseline, {ranking['supervised_beating_rules']} of "
+                f"{ranking['supervised_compared_with_rules']} supervised models are better on "
+                "PR-AUC by a paired group bootstrap; the labelled sample is stratified on the "
+                "rule's own predictions, so this comparison is conditional on that design "
+                "(`reports/ml/evaluation_report.md`)."
+                if "supervised_compared_with_rules" in ranking
+                else ""
+            )
         )
     sensitivity = data["forecast_sensitivity"]
     if sensitivity.get("available"):

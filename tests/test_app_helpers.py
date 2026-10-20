@@ -65,3 +65,10 @@ def test_display_columns_hide_raw_metadata() -> None:
     app = _import_app_with_streamlit_stub()
     frame = pd.DataFrame({"text": ["x"], "metadata": ["{}"], "author": ["a"]})
     assert list(app.display_columns(frame).columns) == ["text"]
+
+
+def test_overview_reports_the_rules_comparison() -> None:
+    app = _import_app_with_streamlit_stub()
+    ranking = app.overview_data()["ranking"]
+    assert ranking["supervised_compared_with_rules"] >= 4
+    assert ranking["supervised_beating_rules"] == 0  # committed comparison: none supported
