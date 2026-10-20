@@ -140,9 +140,31 @@ model. A full-data run is **blocked** on the missing canonical data
 | Forecast monitoring | Existed (bias, coverage, reliability) | Unchanged |
 | Reproducibility | Run metadata and hashes existed | Verified: benchmark, group CV and model comparison regenerate byte-identically |
 | CI | Existed | **Added** model-comparison, batch-inference and adjudication tests and smoke steps |
-| Dashboard | Overview-first; deploy-ready | **Not publicly reachable**: anonymous requests are redirected to Streamlit sign-in (owner setting) |
+| Dashboard | Overview-first; deploy-ready | **Verified in a clean `requirements.txt`-only install** (see §8): every tab renders, both scenario modes run, Live Inference names its active method. The live URL is **not publicly reachable**: anonymous requests are redirected to Streamlit sign-in (owner setting) |
 
-## 6. Proposed experiments (not run)
+## 6. Limitations of these results
+
+- **Not final held-out performance.** Every number is cross-validated on the same 200
+  rows the taxonomy, rules and model families were designed around
+  (`evaluation_status = development_preliminary`).
+- **Sampling design.** The sample is stratified on the rule baseline's predictions. The
+  design-weighted figures use population shares read from a chart rounded to 0.1%,
+  made when the rule set may have differed; their effective sample size is 124 of 200.
+  They are a sensitivity analysis, not a corrected estimate.
+- **Small, clustered data.** There are 23 discussion groups, and the top three hold 34%
+  of rows. Group-bootstrap intervals are wide because of this, and they are the honest
+  width; narrower intervals need more groups, not more comments from the same videos.
+- **Labels.** There is one annotator, with a first-pass vs final κ of 0.30.
+  Inter-annotator agreement is unmeasured, so label noise bounds every metric.
+- **Coverage.** 197 of 200 rows are YouTube, so Reddit performance is unmeasured. Two
+  classes have no labels, and the class-wise F1 for classes under 10 rows moves by large
+  steps with a single prediction.
+- **Baselines.** The frozen encoder's head is untuned, and no transformer was
+  fine-tuned. The rule baseline's class-wise F1 is inflated by construction.
+- **Scope of the target.** Every score describes behavioural intent expressed in public
+  discussion. None of it is a purchase, sales or revenue estimate.
+
+## 7. Proposed experiments (not run)
 
 1. **Frozen evaluation tier**: about 300 comments from at least 40 unseen groups, two-stage
    group sample, double-annotated and adjudicated (protocol §Two tiers). This is the only
@@ -158,7 +180,33 @@ model. A full-data run is **blocked** on the missing canonical data
 5. **Full-data forecasting** with the sensitivity analysis, once the canonical signals
    are rebuilt.
 
-## 7. Resources
+## 8. Verification record
+
+Executed for this document, not inferred:
+
+- **Numbers.** All 48 values in the §3 table (6 models × PR-AUC, its interval, Lift@20,
+  Brier, design-weighted PR-AUC and its interval) were checked programmatically against
+  `reports/ml/model_comparison/point_estimates.csv` and `reports/ml/evaluation_report.md`;
+  0 mismatches. Each supported or not-supported statement was checked against
+  `paired_differences.csv`.
+- **Reproducibility.** Re-running `python -m src.ml.model_comparison --with-embedding`
+  reproduced `point_estimates.csv`, `paired_differences.csv` and `errors.csv` byte for
+  byte.
+- **Clean deployment.** In a fresh clone with only `requirements.txt` installed (no
+  trained artefacts, no full data, no PyMC or torch), the app was driven in headless
+  Chromium. All 11 tabs rendered with no exceptions or console errors, and Events is
+  hidden because its data is absent. The behavioural scenario returned a 90% interval
+  of 0.16 to 3.13. The budget-neutral marketing scenario returned a total spend change
+  of 0. Live Inference ran the supervised `hier[logistic+logistic]` model, trained at
+  startup, not the rules.
+- **Privacy.** A scan of every tracked text file found no YouTube handles, emails,
+  Reddit usernames, channel IDs or API keys in data or reports. The only matches were
+  code decorators, field names and a synthetic test fixture.
+
+**Not verified:** the public Streamlit Cloud deployment. Its URL redirects anonymous
+visitors to a sign-in page, which only the owner can change.
+
+## 9. Resources
 
 | Item | Requirement | Measured / estimated |
 |---|---|---|
