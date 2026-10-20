@@ -6,6 +6,7 @@ All rows below are synthetic test fixtures, never treated as annotation.
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from src.ml.annotation_queue import (
     ANNOTATOR_COLUMNS,
@@ -102,3 +103,21 @@ def test_validation_rejects_bad_rows_and_never_fills_labels() -> None:
     assert (accepted["label_status"] == "human_reviewed_unmerged").all()
     assert report["inter_annotator_agreement"]["items"] == 1
     assert report["inter_annotator_agreement"]["raw_agreement"] == 1.0
+
+
+def test_group_cap_and_inclusion_probability_are_recorded() -> None:
+    labelled = _labelled()
+    pool = pd.DataFrame(
+        {
+            "text": [f"distinct synthetic comment number {i} about the game" for i in range(12)],
+            "source": ["youtube"] * 12,
+            "parent_id": ["big"] * 10 + ["small1", "small2"],
+        }
+    )
+    frame, _ = prepare_pool(pool, labelled)
+    scored = score_pool(frame, model=None)
+    queue, report = select_queue(scored, labelled, quotas={STRATUM_RANDOM: 8}, seed=3, max_per_group=3)
+    assert (queue["parent_id"].value_counts() <= 3).all()
+    assert len(queue) == 5  # 3 from the big group + 2 singletons; the shortfall is reported
+    assert report[STRATUM_RANDOM]["shortfall"] == 3
+    assert queue["inclusion_probability"].iloc[0] == pytest.approx(5 / 12)
