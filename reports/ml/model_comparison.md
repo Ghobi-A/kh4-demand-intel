@@ -2,8 +2,8 @@
 
 > **Preliminary development benchmark.** These numbers come from the current 200-row audit corpus, which is still being re-audited and expanded. They are not final held-out performance and must not be quoted as production or CV headline metrics.
 
-- Run: `5fe6da075b1f` at 2026-10-17T00:16:23.072831+00:00
-- Git commit: `ca7fca9`
+- Run: `db1859d9aaf6` at 2026-10-20T14:50:15.341220+00:00
+- Git commit: `15598b4`
 - Dataset hash: `450745418479c703` (200 rows, annotation `audit_v1_2025`)
 - Seeds: [42, 43, 44, 45, 46] (seed scope: split_and_initialisation)
 - Evaluation mode: `group_holdout`
@@ -18,8 +18,8 @@ Values are mean ± standard deviation over seeds (each seed regenerates the grou
 | char_word_svm | 0.643 ± 0.059 | 0.751 ± 0.075 | 0.367 ± 0.154 | 0.290 ± 0.037 | 0.327 ± 0.075 | 2.941 ± 0.416 |
 | linear_svm | 0.655 ± 0.091 | 0.740 ± 0.098 | 0.313 ± 0.134 | 0.283 ± 0.033 | 0.304 ± 0.066 | 2.941 ± 0.416 |
 | logistic | 0.622 ± 0.055 | 0.719 ± 0.080 | 0.318 ± 0.114 | 0.332 ± 0.073 | 0.308 ± 0.048 | 2.595 ± 0.833 |
-| majority | 0.473 ± 0.087 | 0.313 ± 0.074 | 0.054 ± 0.057 | 0.173 ± 0.028 | 0.017 ± 0.022 | 0.164 ± 0.366 |
-| rules | 0.650 ± 0.076 | 0.575 ± 0.061 | 0.273 ± 0.179 | 0.414 ± 0.159 | 0.414 ± 0.159 | 2.539 ± 0.627 |
+| majority | 0.473 ± 0.087 | 0.313 ± 0.074 | 0.054 ± 0.057 | 0.173 ± 0.028 | 0.017 ± 0.022 | 1.000 ± 0.000 |
+| rules | 0.650 ± 0.076 | 0.575 ± 0.061 | 0.273 ± 0.179 | 0.414 ± 0.159 | 0.414 ± 0.159 | 2.562 ± 0.535 |
 
 ## Reading notes
 
