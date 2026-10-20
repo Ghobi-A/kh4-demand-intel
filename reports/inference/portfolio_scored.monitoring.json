@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-10-20T14:59:09.487688+00:00",
+  "rows": 304,
+  "scored_rows": 304,
+  "coverage": 1.0,
+  "probability_source_counts": {
+    "oof_supervised": 160,
+    "persisted_supervised": 144
+  },
+  "mean_p_actionable": 0.39225699036421646,
+  "predicted_actionable_share": 0.555921052631579,
+  "intent_mix": {
+    "general_discussion": 0.4737,
+    "frustrated_demand": 0.2434,
+    "confusion_barrier": 0.2401,
+    "high_intent": 0.0197,
+    "nostalgia_reactivation": 0.0197,
+    "new_customer_interest": 0.0033
+  },
+  "source_mix": {
+    "youtube": 0.9737,
+    "reddit": 0.0263
+  },
+  "median_words": 29.0,
+  "reference": "reports/ml/group_cv/oof_predictions.csv (logistic out-of-fold, labelled corpus; rule-stratified)",
+  "alerts": [],
+  "psi_p_actionable": 0.14750392826295083,
+  "psi_text_length": 0.07419630738295087,
+  "reference_mean_p_actionable": 0.3365470459204474,
+  "probability_provenance": {
+    "model_run": {
+      "model_name": "logistic",
+      "seed": 42,
+      "git_commit": "dd44d61",
+      "dataset_hash": "450745418479c703",
+      "annotation_version": null,
+      "artifact_dir": "artifacts/hierarchical",
+      "artifact_hash": "b848f82d9669895e",
+      "evaluation_status": "development_preliminary",
+      "threshold": 0.3523235947665243
+    },
+    "probability_generation": "persisted_artifact",
+    "oof_folds": 5,
+    "oof_rows": 200,
+    "oof_matched_rows": 160,
+    "excluded_training_rows": 0,
+    "oof_match_note": "Rows matched to the labelled corpus (by id, or by normalised text when identifiers were stripped) use out-of-fold probabilities. A training row without an out-of-fold value is marked 'excluded_training_row' and contributes nothing to the demand proxy; it is never scored by the persisted model, which trained on it. Only rows outside the corpus use the persisted model.",
+    "probability_source_counts": {
+      "oof_supervised": 160,
+      "persisted_supervised": 144
+    }
+  },
+  "notice": "P(actionable) is the probability that a public comment expresses an actionable behavioural signal. It is not a purchase probability, and the mean is not sales."
+}

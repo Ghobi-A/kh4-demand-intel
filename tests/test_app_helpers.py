@@ -65,3 +65,22 @@ def test_display_columns_hide_raw_metadata() -> None:
     app = _import_app_with_streamlit_stub()
     frame = pd.DataFrame({"text": ["x"], "metadata": ["{}"], "author": ["a"]})
     assert list(app.display_columns(frame).columns) == ["text"]
+
+
+def test_overview_reports_the_rules_comparison() -> None:
+    app = _import_app_with_streamlit_stub()
+    ranking = app.overview_data()["ranking"]
+    assert ranking["supervised_compared_with_rules"] >= 4
+    assert ranking["supervised_beating_rules"] == 0  # committed comparison: none supported
+
+
+def test_inference_method_names_the_active_path() -> None:
+    app = _import_app_with_streamlit_stub()
+    kind, text = app.inference_method(
+        "some/dir",
+        {"source": "trained_this_session", "model_name": "logistic", "seed": 42,
+         "dataset_hash": "abc", "evaluation_status": "development_preliminary"},
+    )
+    assert kind == "supervised" and "supervised two-stage" in text and "abc" in text
+    kind, text = app.inference_method(None, {"error": "no sklearn"})
+    assert kind == "rules" and "rule baseline (fallback)" in text and "no sklearn" in text

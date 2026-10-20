@@ -86,6 +86,14 @@ Base rate 0.30. `high_intent` F1 is 0 out of fold. The deployed model is not
 switched on this evidence; choose between the two under a frozen protocol on
 the expanded corpus.
 
+The paired comparison (`python -m src.ml.model_comparison --with-embedding`,
+`reports/ml/evaluation_report.md`) adds the rule baseline, a word-only linear
+SVM and a frozen MiniLM encoder on identical folds. word+char SVM is supported
+as better than logistic and than word-only SVM. **No supervised model is
+supported as better than the regex rules**, on the sample or design-weighted,
+and the sample's stratification on the rule output limits what that comparison
+can show either way.
+
 ## Bias, drift, and limitations
 
 - Inherits the platform/selection/topic biases in the data card;

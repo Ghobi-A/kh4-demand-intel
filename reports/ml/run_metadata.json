@@ -1,8 +1,8 @@
 {
-  "run_id": "5fe6da075b1f",
+  "run_id": "db1859d9aaf6",
   "experiment_name": "tfidf_group_holdout",
-  "timestamp": "2026-10-17T00:16:23.072831+00:00",
-  "git_commit": "ca7fca9",
+  "timestamp": "2026-10-20T14:50:15.341220+00:00",
+  "git_commit": "15598b4",
   "dataset_hash": "450745418479c703",
   "annotation_version": "audit_v1_2025",
   "row_count": 200,

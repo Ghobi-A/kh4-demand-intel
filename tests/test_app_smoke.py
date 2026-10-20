@@ -41,3 +41,12 @@ def test_live_inference_uses_a_trained_model_not_the_rule_fallback(tmp_path) -> 
         assert 0.0 <= result["actionable_probability"] <= 1.0
     finally:
         inference._LIVE_MODEL.clear()
+
+
+def test_live_inference_banner_states_the_supervised_method() -> None:
+    from streamlit.testing.v1 import AppTest
+
+    app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=180).run()
+    banners = [str(s.value) for s in app.success]
+    assert any("Active inference method: supervised two-stage" in b for b in banners), banners
+    assert not any("rule baseline (fallback)" in str(w.value) for w in app.warning)

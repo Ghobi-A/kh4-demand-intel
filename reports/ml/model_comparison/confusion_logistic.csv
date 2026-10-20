@@ -1,0 +1,7 @@
+,high_intent,nostalgia_reactivation,new_customer_interest,frustrated_demand,confusion_barrier,general_discussion
+high_intent,0,0,0,4,0,3
+nostalgia_reactivation,0,1,0,4,0,3
+new_customer_interest,0,0,0,1,0,1
+frustrated_demand,0,0,0,16,0,9
+confusion_barrier,0,0,0,4,7,7
+general_discussion,0,0,0,26,6,108

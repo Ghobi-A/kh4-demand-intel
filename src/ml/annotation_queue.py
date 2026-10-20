@@ -81,6 +81,10 @@ DEFAULT_QUOTAS: dict[str, int] = {
 RARE_CLASS_THRESHOLD = 10
 NEAR_DUPLICATE_THRESHOLD = 0.80
 DOUBLE_ANNOTATION_SHARE = 0.15
+#: No more than this many comments from one discussion group per batch, so a
+#: single popular video cannot dominate (the current corpus has 34% of rows in
+#: its top three groups).
+DEFAULT_MAX_PER_GROUP = 5
 NEAR_THRESHOLD_BAND = 0.10
 
 ANNOTATOR_COLUMNS = [
@@ -106,6 +110,7 @@ PROVENANCE_COLUMNS = [
     "source_record_id",
     "stratum",
     "stratum_reason",
+    "inclusion_probability",
     "rule_label",
     "model_label",
     "model_probability",
@@ -230,17 +235,41 @@ def _stratum_masks(scored: pd.DataFrame, labelled: pd.DataFrame) -> dict[str, tu
     }
 
 
+def _cap_per_group(ordered, groups: pd.Series, counts: dict, quota: int, cap: int | None) -> list:
+    """Take candidates in order, skipping any whose group already hit the cap."""
+    chosen = []
+    for index in ordered:
+        if len(chosen) >= quota:
+            break
+        group = groups.loc[index]
+        key = group if isinstance(group, str) else f"__none__{index}"
+        if cap is not None and counts.get(key, 0) >= cap:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+        chosen.append(index)
+    return chosen
+
+
 def select_queue(
     scored: pd.DataFrame,
     labelled: pd.DataFrame,
     quotas: dict[str, int] | None = None,
     seed: int = 42,
+    max_per_group: int | None = DEFAULT_MAX_PER_GROUP,
+    double_share: float = DOUBLE_ANNOTATION_SHARE,
 ) -> tuple[pd.DataFrame, dict]:
-    """Fill each stratum's quota in order; report shortfalls instead of back-filling."""
+    """Fill each stratum's quota in order; report shortfalls instead of back-filling.
+
+    Every selected row records its stratum's inclusion probability (selected /
+    eligible at selection time). Without that, a stratified batch cannot later
+    be re-weighted to estimate population performance: the existing corpus has
+    exactly this problem.
+    """
     quotas = dict(quotas or DEFAULT_QUOTAS)
     rng = np.random.default_rng(seed)
     masks = _stratum_masks(scored, labelled)
     taken = pd.Series(False, index=scored.index)
+    group_counts: dict = {}
     parts: list[pd.DataFrame] = []
     report: dict[str, dict] = {}
 
@@ -259,13 +288,14 @@ def select_queue(
                 scored.loc[candidates, "model_probability"] - scored.loc[candidates, "model_threshold"]
             ).abs().fillna(1.0)
             jitter = rng.random(len(candidates)) * 1e-6
-            order = np.argsort(distance.to_numpy() + jitter)
-            chosen = candidates[order[:quota]]
+            ordered = candidates[np.argsort(distance.to_numpy() + jitter)]
         else:
-            chosen = rng.permutation(candidates)[:quota]
+            ordered = rng.permutation(candidates)
+        chosen = _cap_per_group(ordered, scored["group_key"], group_counts, quota, max_per_group)
         part = scored.loc[chosen].copy()
         part["stratum"] = stratum
         part["stratum_reason"] = reason.loc[chosen].to_numpy()
+        part["inclusion_probability"] = len(chosen) / len(candidates) if len(candidates) else np.nan
         parts.append(part)
         taken.loc[chosen] = True
         report[stratum] = {
@@ -273,10 +303,11 @@ def select_queue(
             "eligible": int(len(candidates)),
             "selected": int(len(chosen)),
             "shortfall": int(max(0, quota - len(chosen))),
+            "inclusion_probability": (len(chosen) / len(candidates)) if len(candidates) else None,
         }
 
     queue = pd.concat(parts, ignore_index=True) if parts else scored.iloc[0:0].copy()
-    n_double = int(round(len(queue) * DOUBLE_ANNOTATION_SHARE))
+    n_double = int(round(len(queue) * double_share))
     double = np.zeros(len(queue), dtype=bool)
     if n_double:
         double[rng.choice(len(queue), size=n_double, replace=False)] = True
@@ -304,6 +335,8 @@ def build_annotation_queue(
     seed: int = 42,
     model=None,
     model_metadata: dict | None = None,
+    max_per_group: int | None = DEFAULT_MAX_PER_GROUP,
+    double_share: float = DOUBLE_ANNOTATION_SHARE,
 ) -> dict:
     """Build and write the blind queue, its provenance file and a manifest."""
     if pool_path is None:
@@ -317,7 +350,9 @@ def build_annotation_queue(
 
     frame, excluded = prepare_pool(pool, labelled)
     scored = score_pool(frame, model)
-    queue, strata = select_queue(scored, labelled, quotas, seed)
+    queue, strata = select_queue(
+        scored, labelled, quotas, seed, max_per_group=max_per_group, double_share=double_share
+    )
     queue["pool_path"] = str(pool_path)
     queue["pool_hash"] = _file_hash(pool_path)
 
@@ -343,6 +378,14 @@ def build_annotation_queue(
         "queue_rows": int(len(queue)),
         "double_annotation_rows": int(queue["double_annotate"].sum()),
         "seed": seed,
+        "max_per_group": max_per_group,
+        "double_annotation_share": double_share,
+        "design_note": (
+            "inclusion_probability is selected/eligible within each stratum at selection "
+            "time. random_control is a uniform sample of the eligible pool; later strata are "
+            "conditional on the rows already taken, so use random_control for unbiased "
+            "prevalence estimates and stratum weights for the rest."
+        ),
         "model": {
             "available": model is not None,
             "model_name": (model_metadata or {}).get("model_name"),
@@ -460,6 +503,11 @@ def main() -> None:
     build.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     build.add_argument("--seed", type=int, default=42)
     build.add_argument("--no-model", action="store_true", help="Rule-only disagreement stratum")
+    build.add_argument("--max-per-group", type=int, default=DEFAULT_MAX_PER_GROUP,
+                       help="Cap comments per discussion group (0 = no cap)")
+    build.add_argument("--double-share", type=float, default=DOUBLE_ANNOTATION_SHARE,
+                       help="Share of rows flagged for independent second annotation "
+                            "(use 1.0 for an evaluation batch)")
     validate = sub.add_parser("validate", help="QC a completed annotation batch")
     validate.add_argument("--completed", type=Path, required=True)
     validate.add_argument(
@@ -473,6 +521,7 @@ def main() -> None:
         result = build_annotation_queue(
             pool_path=args.pool, output_dir=args.output_dir, seed=args.seed,
             model=model, model_metadata=metadata,
+            max_per_group=args.max_per_group or None, double_share=args.double_share,
         )
         manifest = result["manifest"]
         print(f"Pool: {manifest['pool_path']} ({manifest['pool_kind']}), "

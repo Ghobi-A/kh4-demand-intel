@@ -87,3 +87,30 @@ def test_ranking_with_no_positives():
     scores = np.linspace(0, 1, 10)
     assert lift_at_k(y, scores, 3) == 0.0
     assert recall_at_k(y, scores, 3) == 0.0
+
+
+def test_tied_scores_are_ranked_by_expectation_not_input_order():
+    """Regression: a stable sort credited tied scores by input order."""
+    from src.ml.ranking import expected_positives_in_top_k, gains_curve
+
+    y = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+    constant = np.zeros(len(y))
+    # A constant score is random review: lift is exactly 1 however rows are ordered.
+    assert lift_at_k(y, constant, 4) == pytest.approx(1.0)
+    assert lift_at_k(y[::-1], constant, 4) == pytest.approx(1.0)
+    # Two-level score: top level fully taken, the boundary tie group shared.
+    # Two-level score: the top tie group (4 rows, 2 positive) straddles k = 3,
+    # so it contributes 3 * 2/4; at k = 6 it is taken whole plus 2 of the
+    # lower group (4 rows, 2 positive).
+    two_level = np.array([1, 1, 0, 0, 0, 0, 1, 1], dtype=float)
+    assert expected_positives_in_top_k(y, two_level, 3) == pytest.approx(1.5)
+    assert expected_positives_in_top_k(y, two_level, 6) == pytest.approx(2 + 2 * (2 / 4))
+    _, gains = gains_curve(y, constant)
+    np.testing.assert_allclose(gains, np.arange(1, 9) / 8)
+
+
+def test_untied_scores_match_plain_sorting():
+    y = np.array([1, 0, 1, 0, 0])
+    scores = np.array([0.9, 0.8, 0.7, 0.2, 0.1])
+    assert precision_at_k(y, scores, 2) == pytest.approx(0.5)
+    assert recall_at_k(y, scores, 3) == pytest.approx(1.0)

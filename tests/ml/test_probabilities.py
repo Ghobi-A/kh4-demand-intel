@@ -255,3 +255,27 @@ def test_pre_fix_uncalibrated_logistic_artefact_is_not_trusted() -> None:
     assert not _is_compatible({**base, "calibrated": False})
     assert _is_compatible({**base, "calibrated": True})
     assert _is_compatible({**base, "calibrated": False, "calibrate_probability_outputs": False})
+
+
+def test_without_oof_labelled_rows_are_excluded_not_scored_in_sample(monkeypatch) -> None:
+    """Regression: use_oof=False used to score training rows with the model that saw them."""
+    from src.ml import probabilities as probs
+
+    labelled = make_fixture_frame()
+    monkeypatch.setattr(probs, "load_labelled_data", lambda *a, **k: labelled)
+
+    class _Stub:
+        threshold = 0.5
+        calibrator = object()
+
+        class stage1:
+            score_type = "probability"
+
+        def stage1_scores(self, texts):
+            return np.full(len(texts), 0.9)
+
+    monkeypatch.setattr(probs, "ensure_hierarchical_model", lambda **k: (_Stub(), {}))
+    signals = pd.DataFrame({"text": [labelled["text"].iloc[0], "an unseen new comment"]})
+    scored, meta = probs.build_probabilities(signals, use_oof=False)
+    assert scored[probs.PROVENANCE_COLUMN].tolist() == [probs.SOURCE_EXCLUDED, probs.SOURCE_PERSISTED]
+    assert np.isnan(scored[probs.PROBABILITY_COLUMN].iloc[0])
