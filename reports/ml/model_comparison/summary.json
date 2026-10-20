@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-10-20T14:45:41.473654+00:00",
+  "evaluation_status": "development_preliminary",
+  "dataset_hash": "450745418479c703",
+  "rows": 200,
+  "groups": 23,
+  "positives": 60,
+  "base_rate": 0.3,
+  "models": [
+    "majority",
+    "rules",
+    "logistic",
+    "linear_svm",
+    "char_word_svm",
+    "embedding"
+  ],
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "n_folds": 5,
+  "n_bootstrap": 1000,
+  "ece": {
+    "majority": 0.08871925105073672,
+    "rules": 0.09891153679604921,
+    "logistic": 0.0717210708059781,
+    "linear_svm": 0.06200519993122998,
+    "char_word_svm": 0.05115168219154445,
+    "embedding": 0.1394410120124254
+  },
+  "design_source": "reports/figures/intent_distribution.png (2026-04-27)",
+  "design_shares": {
+    "general_discussion": 0.884,
+    "nostalgia_reactivation": 0.065,
+    "frustrated_demand": 0.025,
+    "new_customer_interest": 0.01,
+    "high_intent": 0.01,
+    "confusion_barrier": 0.006
+  },
+  "weighted_base_rate": 0.15147999999999998,
+  "max_weight": 1.768,
+  "effective_sample_size": 123.93324459713021,
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+}
