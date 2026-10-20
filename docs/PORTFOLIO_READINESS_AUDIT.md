@@ -114,6 +114,19 @@ Streamlit Community Cloud uses).
 | E9 | P1 | Verified, fixed (pre-existing) | **Saved MMM posterior samples could not run a scenario.** `run_mmm.py` saved only ndarray entries, which dropped the scalar centring constants (`price_mean`, `sales_mean`, `sales_std`, `week_mean`, `week_scale`). The API and dashboard raised `KeyError`, and `predict_sales` would otherwise have fallen back to 0/1 defaults and returned wrong numbers. This affected `--save-posterior` before this PR too. | Constants saved at full precision; the scenario service refuses samples missing any required key. Verified on a clean clone with only `requirements.txt` installed. |
 | F9 | P1 | Re-verified, open | The live URL still redirects anonymous visitors to Streamlit sign-in (HTTP 303). | Owner: check the app's sharing settings in Streamlit Community Cloud. |
 
+## Applied-ML review (2026-10-20)
+
+| ID | Sev | Status | Finding | Fix |
+|---|---|---|---|---|
+| R1 | P0 | Verified, documented | **The labelled sample is stratified on the rule classifier's own prediction** (100 rule-general + 20 per rule class), and the design was never recorded. Rule class recall is near 1 by construction (17/18 `confusion_barrier` rows were sampled because the rule fired), and the sample base rate (0.30) is about twice the design-weighted estimate (0.15). | Design-weighted sensitivity analysis in `src/ml/model_comparison.py`; the annotation queue now records inclusion probabilities per row; protocol in `docs/ANNOTATION_PROTOCOL.md`. |
+| R2 | P1 | Verified, fixed | **Ranking metrics broke ties by row order** (stable sort), and row order follows the sampling strata. Majority-class Lift@10% was reported as 0.16 instead of 1.0, and the rules' Lift@10% as 2.54 instead of 2.56. | Ties broken in expectation (`expected_positives_in_top_k`), including the gains and lift curves; regression tests; benchmark regenerated (only tied models moved). |
+| R3 | P1 | Verified, documented | **No supervised model is distinguishable from the rule baseline** under paired group-bootstrap differences; word+char SVM is supported over logistic and over word-only SVM. | `reports/ml/evaluation_report.md`; the README and Overview tab no longer imply the learned model is better. |
+| R4 | P1 | Verified, fixed | **No batch inference for the supervised model**: the pipeline labelled new data with rules only. | `src/ml/batch_inference.py` with out-of-fold provenance and a monitoring summary (coverage, PSI, intent mix, alerts). |
+| R5 | P2 | Verified, fixed | **No inter-annotator workflow**: only a 15% overlap flag existed. | `src/ml/adjudication.py` (κ, per-class κ, PABAK, blind adjudication queue, independence-checked finalisation). |
+| R6 | P2 | Verified, fixed | The optional embedding model reloaded the encoder per instance, re-encoded per call, and was unpinned. | Cached and pinned to a Hugging Face revision; evaluated as a frozen compact-transformer baseline. |
+| R8 | P1 | Verified, fixed | **`use_oof=False` scored labelled rows in-sample.** `build_probabilities` only tracked training rows when out-of-fold scoring was on, so `--no-oof` (temporal build, batch inference) let the persisted model score the 160 rows it trained on. | Training rows are always tracked and marked `excluded_training_row`; regression test. |
+| R7 | P3 | Verified, open | Preprocessing removes duplicate IDs but not duplicate or near-duplicate texts across scrapes. | Near-duplicates are excluded at annotation time; ingestion-time dedupe is proposed. |
+
 ## Reproducible commands
 
 ```bash

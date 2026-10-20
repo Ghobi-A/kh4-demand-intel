@@ -33,9 +33,15 @@ is 60/140. Max/min imbalance ratio is 70:1.
 
 - **Platform bias:** 197 of 200 labelled rows are YouTube; Reddit is
   barely represented in the labelled set.
-- **Selection bias:** rows were sampled around rule-classifier
-  behaviour (precision/recall slices), so the labelled distribution is
-  not a random sample of the full signal set.
+- **Selection bias:** rows were sampled *stratified on the rule
+  classifier's prediction*: 100 rows the rule called `general_discussion`
+  plus 20 per rule-predicted class (`scripts/sample_intent_audit.py`). The
+  inclusion probabilities were not recorded. The sample base rate of
+  actionable comments is 0.30; a design-weighted estimate using the
+  population rule-label shares in `reports/figures/intent_distribution.png`
+  gives about 0.15. Rule accuracy measured on this sample is inflated by
+  construction. New queues record inclusion probabilities
+  (`docs/ANNOTATION_PROTOCOL.md`).
 - **Topic/creator bias:** only 23 discussion groups; a handful of videos
   dominate.
 - **Language bias:** predominantly English; rules and models are not

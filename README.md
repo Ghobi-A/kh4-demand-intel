@@ -67,8 +67,19 @@ data appear anywhere in this project, and none are inferred.
 | Forecasting | 304-row class-stratified **demo sample** | Demo smoke run; full-data run blocked on missing input |
 | Marketing mix model | **Synthetic** simulated data with known ground truth | Method demonstration only |
 
-The evidence, its severity-ranked defects and what is blocked are in
-[`docs/PORTFOLIO_READINESS_AUDIT.md`](docs/PORTFOLIO_READINESS_AUDIT.md).
+Start here:
+
+- [`docs/CASE_STUDY.md`](docs/CASE_STUDY.md): the question, the evidence, what was
+  executed and what is only proposed.
+- [`reports/ml/evaluation_report.md`](reports/ml/evaluation_report.md): the inspectable
+  model comparison (paired uncertainty, design weighting, review-budget ranking, every
+  error with its text).
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the system diagram, with observed,
+  derived, model and synthetic data kept visually apart.
+- [`docs/ANNOTATION_PROTOCOL.md`](docs/ANNOTATION_PROTOCOL.md): how the corpus should
+  grow, with independent double annotation and adjudication.
+- [`docs/PORTFOLIO_READINESS_AUDIT.md`](docs/PORTFOLIO_READINESS_AUDIT.md):
+  severity-ranked defects and what is blocked.
 
 ## What the evaluation actually found
 
@@ -79,13 +90,19 @@ VADER-positive comments (73%) are non-actionable discussion, while 17 of 41 nega
 comments (41%) carry an actionable signal such as frustrated demand or a confusion
 barrier. (200 rows sampled around rule behaviour; one annotator.)
 
-**2. Actionable-signal ranking beats random review, with wide uncertainty.** Under
-group-aware 5-fold cross-validation (every row scored by a model that never saw its
-discussion group; calibration and threshold fitted on inner validation folds), the
-word+char SVM reaches Stage 1 PR-AUC 0.65 (group-bootstrap 95%: 0.55–0.77) against a
-base rate of 0.30, and Lift@10% 2.5 (2.1–3.3). Intent-level results are weak:
-`high_intent` F1 is 0 out of fold, and two classes have no labels at all
-(`reports/ml/group_cv_report.md`).
+**2. Every model beats random review, but no learned model can be separated from the
+regex rules.** Under group-aware 5-fold cross-validation (every row scored by a model
+that never saw its discussion group; calibration and threshold fitted on inner
+validation folds), the word+char SVM reaches Stage 1 PR-AUC 0.65 (group-bootstrap 95%:
+0.56–0.75) against a base rate of 0.30, and the rule baseline 0.62 (0.52–0.72). Paired
+group-bootstrap differences between the rules and each of logistic, linear SVM,
+word+char SVM and a frozen MiniLM encoder all have intervals spanning zero. The
+labelled sample was drawn *stratified on the rule's own predictions*, which inflates the
+rule's apparent accuracy. A design-weighted sensitivity analysis puts actionable
+prevalence at about 0.15 rather than 0.30, and ranks the rules fifth, still without a
+supported difference. Intent-level results are weak: `high_intent` F1 is 0 out of fold
+for every TF-IDF model, and two classes have no labels at all
+(`reports/ml/evaluation_report.md`).
 
 **3. No forecasting model is reliable on this history, and a model ranking based on six
 forecasts says almost nothing.** On the demo sample, the naive last-value forecast has
@@ -162,28 +179,24 @@ Annotation definitions, boundary cases, and priority rules:
 
 ## 4. ML architecture
 
+The full system diagram (Mermaid, rendered by GitHub) is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The NLP path in brief:
+
 ```
 Reddit / YouTube → Ingestion → Preprocessing → VADER Sentiment
         ↓
 Behavioural Intent Modelling
     ├── Rule baseline (regex, interpretable)
-    ├── TF-IDF Logistic Regression
-    ├── TF-IDF Linear SVM
-    ├── Word + character TF-IDF SVM
-    ├── Optional sentence-embedding model  (.[embeddings])
-    └── Optional transformer interface     (.[transformers])
+    ├── TF-IDF Logistic Regression / Linear SVM / word+char SVM
+    └── Frozen MiniLM sentence-encoder baseline   (.[embeddings])
         ↓
 Calibrated probabilities (validation-only Platt scaling)
         ↓
+Batch inference with provenance + monitoring (coverage, PSI)
+        ↓
 Actionable-signal ranking (Precision@K, Recall@K, Lift@K)
         ↓
-Heuristic demand / activation / risk scoring (unchanged)
-        ↓
-Evaluation + error analysis → Streamlit dashboard
-        ↓
-Temporal aggregation (weekly demand proxies)
-        ↓
-Forecasting → rolling-origin validation → monitoring → scenarios
+Temporal aggregation (weekly demand proxies) → Forecasting → monitoring
 ```
 
 Separately, and never mixed with the above:
@@ -245,6 +258,12 @@ Two complementary views, both `development_preliminary`:
   so per-class support is the full corpus count, with group-bootstrap
   intervals, calibration bins with Wilson intervals, per-group stability and
   error slices (source, sampling strategy, length, rule agreement).
+- **Paired model comparison** (`python -m src.ml.model_comparison --with-embedding` →
+  `reports/ml/evaluation_report.md`): every model on identical folds; paired
+  group-bootstrap differences, with a model called better only when the 95% interval
+  excludes zero; a design-weighted sensitivity analysis for the rule-stratified sample;
+  review-budget ranking (P@k, R@k, Lift@k for k = 10, 20, 30, 60); confusion matrices;
+  and every error with its text (`reports/ml/model_comparison/errors.csv`).
 - **Repeated group holdout** (`python -m src.ml.benchmark`), below.
 
 > **Preliminary development benchmark** — 200 rows, 23 groups, 5 seeds.
@@ -262,7 +281,10 @@ Precision@K, Recall@K, and Lift@K (K = 10/25/50/100 and 5/10/20%), plus
 cumulative-gains and lift curves (`reports/ml/figures/`). Lift@10%
 answers: how many more actionable signals does a reviewer find in the
 top 10% model-ranked comments than by random review? Only measured lift
-is reported.
+is reported. Tied scores (the rule baseline's two levels, a constant majority score)
+are broken in expectation rather than by row order. Row order here follows the
+sampling strata, and an earlier stable-sort implementation reported a majority-class
+Lift@10% of 0.16 instead of 1.0.
 
 ## 10. Error analysis
 
@@ -495,6 +517,9 @@ python -m src.ml.error_analysis                # error reports
 python -m src.ml.drift                         # distribution-shift report
 python -m src.ml.active_learning               # re-audit queue
 python -m src.ml.annotation_queue build        # stratified, blind expansion queue
+python -m src.ml.adjudication agreement --a A.csv --b B.csv   # kappa + adjudication queue
+python -m src.ml.model_comparison --with-embedding            # paired comparison report
+python -m src.ml.batch_inference --input signals.csv --output scored.csv  # + monitoring
 pytest                                         # full test suite
 ```
 
@@ -502,6 +527,16 @@ Every run records run ID, git commit, dataset hash, annotation version,
 seeds, split/group counts, frozen threshold, and
 `evaluation_status = development_preliminary`
 (`reports/ml/run_metadata.json`).
+
+### Resource requirements
+
+| Task | Needs | Measured on a 4-CPU container |
+|---|---|---|
+| Tests, benchmark, group CV, classical model comparison | `.[ml,dev]` | ~30 s for the comparison; ~40 s fast test suite |
+| Frozen MiniLM baseline | `pip install torch --index-url https://download.pytorch.org/whl/cpu` then `.[embeddings]`; 88 MB model download | ~80 s comparison incl. encoder; no GPU |
+| Bayesian forecast (demo) / MMM | `.[forecast]` | a few minutes each, 4 chains |
+| Full-data forecasting, new annotation pool | canonical `data/processed/signals_scored.csv` + YouTube API key | **not available here**; see `scripts/check_full_data_readiness.py` |
+| Annotation round (300 items, double) | 2 annotators + 1 adjudicator | ~2.5 h per annotator + ~1 h adjudication (estimate) |
 
 ## 18. Limitations
 
@@ -511,7 +546,10 @@ seeds, split/group counts, frozen threshold, and
 - One annotator. First-pass and final labels agree on 57% of rows (κ 0.30),
   a revision rate rather than inter-annotator agreement, which is unmeasured.
 - 197/200 labelled rows are YouTube; Reddit performance is unmeasured.
-- Labels were sampled around rule-classifier behaviour (selection bias).
+- Labels were sampled stratified on the rule classifier's own predictions, and the
+  inclusion probabilities were not recorded. Rule accuracy is inflated by
+  construction, and population estimates rest on an approximate design-weighting
+  sensitivity analysis.
 - `demand_score` is a heuristic decision-support signal, not a forecast.
 - Community signals are not unit sales; KH4 is unreleased, so no purchase
   conversion exists to validate any forecast against.
