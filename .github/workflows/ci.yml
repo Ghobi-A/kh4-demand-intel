@@ -53,6 +53,24 @@ jobs:
             --output-dir /tmp/ci-gcv --report /tmp/ci-gcv/report.md
           test -f /tmp/ci-gcv/summary.json
 
+      - name: Paired model comparison smoke test (classical models)
+        run: |
+          python -m src.ml.model_comparison --seeds 42 --bootstrap 50 \
+            --output-dir /tmp/ci-mc --report /tmp/ci-mc/report.md
+          test -f /tmp/ci-mc/paired_differences.csv
+          grep -q "Which differences are supported" /tmp/ci-mc/report.md
+
+      - name: Batch inference smoke test
+        run: |
+          python -m src.ml.batch_inference --input data/demo/signals_scored_portfolio.csv \
+            --output /tmp/ci-inference/scored.csv --no-oof
+          python - <<'PY'
+          import json
+          m = json.load(open("/tmp/ci-inference/scored.monitoring.json"))
+          assert m["rows"] == 304 and m["coverage"] > 0.4, m
+          print("batch inference monitoring OK", m["probability_source_counts"])
+          PY
+
       - name: Full-data readiness check abstains without canonical data
         run: |
           set +e
