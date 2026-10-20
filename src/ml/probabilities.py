@@ -343,8 +343,11 @@ def build_probabilities(
 
     oof_map: dict[str, float] = {}
     text_oof_map: dict[str, float] = {}
+    # The labelled corpus is loaded either way: with use_oof=False its rows are
+    # still training rows of the persisted model, so they must be marked
+    # excluded rather than scored in-sample.
+    labelled = load_labelled_data(labelled_path) if labelled_path else load_labelled_data()
     if use_oof:
-        labelled = load_labelled_data(labelled_path) if labelled_path else load_labelled_data()
         oof_map = oof_actionable_probabilities(
             labelled, model_name=model_name, seed=seed, n_folds=n_folds
         )
@@ -352,11 +355,8 @@ def build_probabilities(
             labelled, model_name=model_name, seed=seed, n_folds=n_folds, by_text=True
         )
 
-    training_ids: set = set()
-    training_text_keys: set = set()
-    if use_oof:
-        training_ids = set(labelled["record_id"].astype(str))
-        training_text_keys = set(labelled["text"].map(normalise_text_key))
+    training_ids = set(labelled["record_id"].astype(str))
+    training_text_keys = set(labelled["text"].map(normalise_text_key))
 
     scored = attach_actionable_probabilities(
         signals,
