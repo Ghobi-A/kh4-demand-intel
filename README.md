@@ -4,7 +4,7 @@
 decision support built on public Kingdom Hearts IV community signals, plus a
 separately labelled synthetic Marketing Mix Modelling experiment.**
 
-**Live dashboard:** https://kh4-demand-intel.streamlit.app
+**Dashboard deployment (currently redirects anonymous visitors to sign-in):** https://kh4-demand-intel.streamlit.app
 
 ![Dashboard Overview tab: status of each component, what the data is, and the findings ranked by how far they can be trusted](docs/images/dashboard_overview.png)
 

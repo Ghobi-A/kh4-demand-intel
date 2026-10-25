@@ -3,9 +3,10 @@
 Review basis: `main` at `15598b4a16a30ad0dba6050421b8adae265294f2` and PR #26 at
 `c80400d75634a5b103176f433bd810936c33990b`, inspected through Git. This follow-up
 branch includes the PR's existing work; it does not merge PR #26 into main.
-GitHub API access is blocked by the environment network policy, so PR comments,
-review threads, checks and formal approval state could not be inspected. This is
-a code-and-evidence review, not a GitHub approval.
+GitHub access became available after the initial review. PR #26 is open, its
+Python 3.10/3.11/3.12 and PyMC checks pass, and it has no review comments or
+submitted reviews. This document is a code-and-evidence review, not a GitHub
+approval. Follow-up draft PR: https://github.com/Ghobi-A/kh4-demand-intel/pull/27.
 
 ## Review decision
 
@@ -47,7 +48,7 @@ used during development; cross-validation cannot turn them into a final test.
   Lift@20 exactly for all five classical baselines.
 - Replaying saved predictions for all six models reproduced `point_estimates.csv`,
   `paired_differences.csv` and `errors.csv` byte for byte. This validates those
-  calculations, **not** an encoder refit. MiniLM downloads are blocked here.
+  calculations, **not** an encoder refit. The weight CDN remains blocked here (metadata access works).
 - Original-fold word+char SVM PR-AUC is 0.653, versus rules 0.616 and frozen
   MiniLM 0.493. Its paired PR-AUC difference from rules includes zero. This is
   selected development evidence, not an established population winner.
@@ -74,9 +75,9 @@ used during development; cross-validation cannot turn them into a final test.
 Searched all 26 remote branches, their reachable tracked-data history and this
 checkout. No `data/processed/signals_scored.csv`, canonical clean input or raw
 comment collection was found. Tracked data consists of demo extracts, video
-seeds, reference events and synthetic marketing data. Other repositories in the
-owner's account cannot be searched until GitHub API access is available; this
-search does not establish that no other repository contains the data.
+seeds, reference events and synthetic marketing data. A subsequent account search for KH4, Kingdom and demand found only this
+repository. That does not establish that inaccessible or differently named
+repositories contain no additional data.
 
 The new queue at `reports/annotation/research_review/` is explicitly a **demo-pool
 training acquisition queue**. It has no human labels. The small pool cannot fill
@@ -109,19 +110,21 @@ and timestamps; check scope and volume representativeness before forecasting.
 
 ## Public demo and delivery boundaries
 
-No app merge, deploy or visibility setting has been changed. The current public
-URL check is blocked by network policy. PR #26's prior report of a sign-in redirect
-has not been independently rechecked here. There is no application login flow in
+No app merge, deploy or visibility setting has been changed. An anonymous HEAD request independently confirms HTTP 303 to Streamlit
+sharing authentication. The public demo currently requires sign-in. There is no application login flow in
 `app.py`; a platform visibility restriction must be changed by the owner in
 Streamlit Community Cloud, after approval: set the app visibility to Public, then
 verify the URL in a signed-out/incognito session, including interactions. Do not
 claim anonymous accessibility based on a local dashboard test.
 
-GitHub API, encoder downloads and the public demo need `api.github.com`,
-`huggingface.co`, and `kh4-demand-intel.streamlit.app`; these additions were saved
-in the environment draft. A successful draft save does not apply or publish it.
-Encoder weight downloads may identify additional exact CDN domains after access
-is enabled. No credentials were requested or fabricated.
+GitHub API, Hugging Face metadata and public-demo requests now work. The pinned
+encoder weight resolves to `us.aws.cdn.hf.co`, where the proxy still returns 403.
+That exact additional domain was saved in the environment draft; the owner must
+enable it before the linked-fold encoder refit can complete. CPU torch and
+sentence-transformers installed successfully. The supported HTTPS download route
+(`HF_HUB_DISABLE_XET=1`) retains TLS verification; no signature or checksum check
+was disabled, and no incomplete model weights were used. No credentials were
+requested or fabricated. Saving a draft does not publish the environment.
 
 ## Reproduction and validation
 
@@ -149,6 +152,8 @@ python -m src.ml.model_comparison --link-near-duplicates \
 # Once model-download access is available, refit the frozen encoder on linked folds.
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -e '.[embeddings]'
+export HF_HOME=/workspace/.cache/kh4/huggingface
+export HF_HUB_DISABLE_XET=1
 python -m src.ml.model_comparison --with-embedding --link-near-duplicates \
   --output-dir /tmp/kh4-linked-all --report /tmp/kh4-linked-all/report.md
 
@@ -162,7 +167,8 @@ Ruff, dependency consistency, package imports, original-fold classical refits,
 six-model saved-prediction replay, linked-group refit and the CI refit/replay
 byte-comparison smoke check passed. Full posterior production experiments were
 not rerun. Dataset readiness exits 2 as expected for missing canonical input.
-The separate clean app environment installs only `requirements.txt` plus pytest,
+The full 377-test regression suite passed again after installing the optional
+CPU embedding dependencies. The separate clean app environment installs only `requirements.txt` plus pytest,
 with no full dataset, trained artefacts, PyMC or torch. Its AppTest exercises all
 11 tabs, trained live inference and comparison/error controls. It validates the
 local application, not Streamlit Cloud visibility or publication.

@@ -631,6 +631,11 @@ def run_comparison(
 
         meta["embedding_model"] = DEFAULT_EMBEDDING_MODEL
         meta["embedding_revision"] = DEFAULT_EMBEDDING_REVISION
+        if not is_replay:
+            meta["package_versions"].update({
+                name: importlib.metadata.version(name)
+                for name in ("torch", "sentence-transformers", "transformers", "huggingface-hub")
+            })
 
     points.to_csv(output_dir / "point_estimates.csv")
     pairs.to_csv(output_dir / "paired_differences.csv", index=False)
