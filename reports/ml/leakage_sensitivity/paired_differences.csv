@@ -1,0 +1,29 @@
+model,versus,metric,mean_difference,ci_low,ci_high,verdict
+majority,rules,pr_auc,-0.34716842872479126,-0.4433841510630346,-0.2553346905817345,rules better (interval excludes 0)
+majority,rules,lift_at_20,-1.6606679918902114,-2.4691002983000976,-1.0880820080866231,rules better (interval excludes 0)
+majority,rules,brier,0.08026013547637689,0.05196321224467211,0.11063557170998933,rules better (interval excludes 0)
+majority,rules,weighted_pr_auc,-0.17228048062304988,-0.3232132288973226,-0.06406706441679987,rules better (interval excludes 0)
+logistic,rules,pr_auc,-0.11266889302481922,-0.23807912632479972,0.004255356616814538,not distinguishable
+logistic,rules,lift_at_20,-0.3579353793614937,-1.0873144870776448,0.12751720921028534,not distinguishable
+logistic,rules,brier,0.052929124669215115,0.018471389636447854,0.09196248473805574,rules better (interval excludes 0)
+logistic,rules,weighted_pr_auc,0.03366368131515885,-0.11413925178314249,0.16449030030316703,not distinguishable
+linear_svm,rules,pr_auc,-0.09087249910342124,-0.21712751400869124,0.029485368488402424,not distinguishable
+linear_svm,rules,lift_at_20,-0.3122026672813388,-1.0528757208600201,0.16654629915708588,not distinguishable
+linear_svm,rules,brier,0.045515794614122126,0.010244073868925976,0.08393073404750158,rules better (interval excludes 0)
+linear_svm,rules,weighted_pr_auc,0.04780529794736005,-0.11590192920644506,0.18037582740109157,not distinguishable
+char_word_svm,rules,pr_auc,-0.03258449210908765,-0.1569853735211049,0.08847364934968335,not distinguishable
+char_word_svm,rules,lift_at_20,-0.08689209317798344,-0.8201808392729828,0.505942925927196,not distinguishable
+char_word_svm,rules,brier,0.034187288372907604,0.0006230345312701089,0.06863154694417875,rules better (interval excludes 0)
+char_word_svm,rules,weighted_pr_auc,0.09119542255096247,-0.07007158752405933,0.24190343998204117,not distinguishable
+linear_svm,logistic,pr_auc,0.021796393921398007,0.010425431741594837,0.031147412479130304,linear_svm better (interval excludes 0)
+linear_svm,logistic,lift_at_20,0.04573271208015497,-0.1453817829457367,0.2510737837501549,not distinguishable
+linear_svm,logistic,brier,-0.007413330055092981,-0.010551896427600793,-0.0042757010869035545,linear_svm better (interval excludes 0)
+linear_svm,logistic,weighted_pr_auc,0.01414161663220119,-0.00890835574314372,0.03562752262627194,not distinguishable
+char_word_svm,logistic,pr_auc,0.08008440091573157,0.045301220010835606,0.11205658064171527,char_word_svm better (interval excludes 0)
+char_word_svm,logistic,lift_at_20,0.2710432861835103,-0.0565656565656565,0.6890690104166659,not distinguishable
+char_word_svm,logistic,brier,-0.01874183629630751,-0.028914501061320146,-0.009378605628533612,char_word_svm better (interval excludes 0)
+char_word_svm,logistic,weighted_pr_auc,0.05753174123580361,0.017397270199976403,0.10407875179607766,char_word_svm better (interval excludes 0)
+char_word_svm,linear_svm,pr_auc,0.05828800699433357,0.026734251556846774,0.0880019652359718,char_word_svm better (interval excludes 0)
+char_word_svm,linear_svm,lift_at_20,0.2253105741033553,-0.11432712215320871,0.7028730811403507,not distinguishable
+char_word_svm,linear_svm,brier,-0.01132850624121453,-0.020804540032897712,-0.0022015575512817215,char_word_svm better (interval excludes 0)
+char_word_svm,linear_svm,weighted_pr_auc,0.04339012460360242,0.014185706022830877,0.07397045930341224,char_word_svm better (interval excludes 0)

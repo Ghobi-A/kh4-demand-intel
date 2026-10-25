@@ -86,10 +86,11 @@ Base rate 0.30. `high_intent` F1 is 0 out of fold. The deployed model is not
 switched on this evidence; choose between the two under a frozen protocol on
 the expanded corpus.
 
-The paired comparison (`python -m src.ml.model_comparison --with-embedding`,
+The original-fold paired comparison (`python -m src.ml.model_comparison --with-embedding`,
 `reports/ml/evaluation_report.md`) adds the rule baseline, a word-only linear
-SVM and a frozen MiniLM encoder on identical folds. word+char SVM is supported
-as better than logistic and than word-only SVM. **No supervised model is
+SVM and a frozen MiniLM encoder on identical folds. word+char SVM has exploratory pointwise intervals
+favouring it over logistic and word-only SVM; these are not multiplicity-adjusted
+confirmatory tests. **No supervised model is
 supported as better than the regex rules**, on the sample or design-weighted,
 and the sample's stratification on the rule output limits what that comparison
 can show either way.
@@ -108,3 +109,13 @@ can show either way.
 - With 23 discussion groups, split composition dominates variance:
   per-seed standard deviations are large and single-seed numbers are not
   meaningful.
+
+## Follow-up leakage review
+
+The original PR #26 folds contain one near-duplicate pair across two videos
+(cosine 0.8499). A separate classical sensitivity links connected discussions
+before both outer and inner splitting: see
+[`reports/ml/leakage_sensitivity/report.md`](../reports/ml/leakage_sensitivity/report.md).
+The frozen embedding baseline has not yet been refit on linked folds in this
+environment because model downloads are blocked. Do not combine the two
+protocols or claim a final winner. See [`RESEARCH_REVIEW.md`](RESEARCH_REVIEW.md).

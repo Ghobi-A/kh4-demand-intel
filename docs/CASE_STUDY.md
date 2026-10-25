@@ -39,15 +39,17 @@ classifier called `general_discussion`, plus 20 comments for each class the rule
 predicted. The inclusion probabilities were never recorded. Consequences, all
 **executed** and measured:
 
-- The rule baseline's class recall is near 1 by construction. 17 of the 18
-  `confusion_barrier` rows entered the sample *because the rule fired*, so its
-  class-wise F1 (0.94) is an artefact.
+- Rule-positive strata are oversampled, so class-wise scores are conditional on
+  selection. For example, 17 of 18 `confusion_barrier` rows were sampled because
+  the rule fired. This does not prove recall is near 1 by construction or quantify
+  population bias; the original sampling frame is missing.
 - Actionable comments are over-represented. The sample base rate is 0.30; a
   design-weighted estimate, using population rule-label shares from
   `reports/figures/intent_distribution.png`, puts it at **0.15**.
 
-The annotation queue now records every row's stratum and inclusion probability, so the
-next batch does not repeat this.
+The training queue records strata and allocation fractions. Capped and targeted
+rows have unknown inclusion probabilities and cannot support population weighting.
+A representative frozen evaluation sample remains separate, proposed work.
 
 ## 2. Evaluation protocol (executed)
 
@@ -82,7 +84,7 @@ revision) with a class-balanced logistic head.
 | char_word_svm | 0.65 [0.56–0.75] | 2.50 | 0.157 | 0.43 [0.27–0.61] |
 | embedding (frozen MiniLM) | 0.49 [0.42–0.58] | 2.00 | 0.206 | 0.32 [0.22–0.49] |
 
-What the paired tests **support**:
+Exploratory paired intervals (pointwise, without multiplicity correction) suggest:
 
 - The rule baseline beats the majority baseline (the only pairing tested against
   majority). Every model's PR-AUC interval lies above the base rate, both on the sample
@@ -94,7 +96,7 @@ What the paired tests **support**:
 What they **do not support**:
 
 - Any supervised model being better than the rule baseline. On the sample the rules
-  rank second; design-weighted, they rank fifth. The intervals overlap in both cases,
+  rank second; design-weighted, they rank fifth. The paired difference intervals contain zero in both cases,
   and the closest call (word+char SVM vs rules, design-weighted) has a 95% interval of
   −0.00 to +0.25.
 - The frozen-encoder result as a verdict on transformers. Its head uses the same
@@ -135,7 +137,7 @@ model. A full-data run is **blocked** on the missing canonical data
 | Preprocessing | Existed (empty, deleted and duplicate-ID removal; URL strip) | Gap noted: no text-level dedupe at ingestion |
 | Calibrated probabilities | Existed (fixed in the previous PR) | Unchanged |
 | Group-aware evaluation | Existed (holdout + group CV) | **Added** paired bootstrap, design weighting, review-budget ranking, compact-transformer baseline, inspectable errors |
-| Annotation workflow | Queue + validator existed | **Added** group cap, inclusion probabilities, double annotation, blind adjudication, protocol |
+| Annotation workflow | Queue + validator existed | **Added** group cap, allocation fractions, double annotation, blind adjudication, protocol; corrected unknown inclusion probabilities and frozen-group exclusion in the follow-up review |
 | Batch inference | **Missing** (pipeline labelled with rules only) | **Added** `src.ml.batch_inference` with provenance and monitoring (coverage, PSI, intent mix). On the demo extract with OOF off, the monitor correctly flags 47% coverage (labelled rows excluded, never scored in-sample; this fixed a leak where `--no-oof` scored them in-sample) and a PSI of 1.15, because every remaining row is rule-predicted actionable |
 | Forecast monitoring | Existed (bias, coverage, reliability) | Unchanged |
 | Reproducibility | Run metadata and hashes existed | Verified: benchmark, group CV and model comparison regenerate byte-identically |
@@ -160,7 +162,7 @@ model. A full-data run is **blocked** on the missing canonical data
   classes have no labels, and the class-wise F1 for classes under 10 rows moves by large
   steps with a single prediction.
 - **Baselines.** The frozen encoder's head is untuned, and no transformer was
-  fine-tuned. The rule baseline's class-wise F1 is inflated by construction.
+  fine-tuned. The rule baseline's class-wise F1 is conditional on the selected sample.
 - **Scope of the target.** Every score describes behavioural intent expressed in public
   discussion. None of it is a purchase, sales or revenue estimate.
 
@@ -180,9 +182,11 @@ model. A full-data run is **blocked** on the missing canonical data
 5. **Full-data forecasting** with the sensitivity analysis, once the canonical signals
    are rebuilt.
 
-## 8. Verification record
+## 8. Prior PR verification record
 
-Executed for this document, not inferred:
+The following record was authored in PR #26. The follow-up review distinguishes
+checks rerun in this environment from these historical claims in
+[`RESEARCH_REVIEW.md`](RESEARCH_REVIEW.md):
 
 - **Numbers.** All 48 values in the §3 table (6 models × PR-AUC, its interval, Lift@20,
   Brier, design-weighted PR-AUC and its interval) were checked programmatically against
@@ -231,3 +235,15 @@ python -m src.ml.annotation_queue build
 python scripts/check_full_data_readiness.py          # exits 2: canonical data absent
 pytest -m "not pymc_smoke"
 ```
+
+## Follow-up research review
+
+See [`RESEARCH_REVIEW.md`](RESEARCH_REVIEW.md) for the reviewed PR scope, corrected
+statistical claims, current validation, data search and remaining blockers. No
+final held-out result or commercial deployment claim is justified.
+
+The follow-up linked-group sensitivity reverses the leading point ordering:
+rules PR-AUC 0.634, word+char SVM 0.598, paired difference interval −0.157
+to +0.088. This is evidence of fragility under a changed split, not evidence
+that the rules win in the population. Original-fold MiniLM remains a historical
+baseline pending a linked-fold refit.

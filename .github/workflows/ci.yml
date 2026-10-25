@@ -55,10 +55,15 @@ jobs:
 
       - name: Paired model comparison smoke test (classical models)
         run: |
-          python -m src.ml.model_comparison --seeds 42 --bootstrap 50 \
+          python -m src.ml.model_comparison --seeds 42 --bootstrap 50 --link-near-duplicates \
             --output-dir /tmp/ci-mc --report /tmp/ci-mc/report.md
           test -f /tmp/ci-mc/paired_differences.csv
           grep -q "Which differences are supported" /tmp/ci-mc/report.md
+          python -m src.ml.model_comparison --seeds 42 --bootstrap 50 --link-near-duplicates \
+            --oof /tmp/ci-mc/group_cv/oof_predictions.csv \
+            --output-dir /tmp/ci-mc-replay --report /tmp/ci-mc-replay/report.md
+          cmp /tmp/ci-mc/point_estimates.csv /tmp/ci-mc-replay/point_estimates.csv
+          cmp /tmp/ci-mc/paired_differences.csv /tmp/ci-mc-replay/paired_differences.csv
 
       - name: Batch inference smoke test
         run: |

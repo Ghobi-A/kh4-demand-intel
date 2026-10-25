@@ -1,13 +1,15 @@
 # Evaluation report: actionable-signal detection
 
-> **Executed, development-preliminary results.** Every number below was produced by `python -m src.ml.model_comparison --with-embedding` on 2026-10-20 over the 200-row single-annotator audit corpus (23 discussion groups, dataset hash `450745418479c703`). It is cross-validated development evaluation, not final held-out performance: the taxonomy, rules and model families were designed around these rows.
+> **Executed, development-preliminary results.** Every number below was produced by `python -m src.ml.model_comparison --with-embedding` on 2026-10-25 over the 200-row single-annotator audit corpus (23 discussion groups, dataset hash `450745418479c703`). It is cross-validated development evaluation, not final held-out performance: the taxonomy, rules and model families were designed around these rows.
+
+Execution mode: `prediction_replay`. Prediction replay recomputes metrics and intervals from saved OOF scores; it does not verify encoder downloads or model refitting. Package versions and OOF SHA-256 are recorded in the companion summary.json.
 
 ## Protocol
 
 - 5-fold **group** cross-validation (whole YouTube videos / Reddit threads held out), repeated over fold seeds [42, 43, 44]; every model sees identical folds.
 - Inside each training fold, a group-held-out validation split fits Platt calibration and the Stage 1 threshold; the held-out fold is touched only for scoring.
 - TF-IDF vocabularies and model weights are fitted per fold (scikit-learn pipelines).
-- Uncertainty: 1000 paired group-bootstrap replicates (groups resampled once per replicate, all models scored on the same resample, averaged over fold seeds).
+- Uncertainty: 1000 paired group-bootstrap replicates (groups resampled once per replicate, all models scored on the same resample, averaged over fold seeds). These intervals condition on the fitted OOF predictions; they do not refit models in each replicate or account for model-selection uncertainty.
 - Relevance target for ranking metrics: actionable vs general discussion (base rate 0.30, 60 actionable rows). Ties are broken in expectation.
 - `embedding`: frozen `sentence-transformers/all-MiniLM-L6-v2` (revision `1110a24`) sentence embeddings + class-balanced logistic head. The encoder is not fine-tuned.
 
@@ -15,7 +17,7 @@
 
 Mean over fold seeds; 95% group-bootstrap interval in brackets. PR-AUC of a random ranking equals the base rate (0.30); Lift@k of random review is 1.
 
-| Model | PR-AUC | Lift@20 (top 10%) | Lift@60 (= #positives) | Brier | ECE |
+| Model | PR-AUC | Lift@20 (top 10%) | Lift@60 (= #positives) | Brier | ECE (reference seed) |
 |---|---|---|---|---|---|
 | majority | 0.308 [0.23–0.37] | 1.10 [0.85–1.28] | 1.01 [0.86–1.18] | 0.212 [0.187–0.234] | 0.089 |
 | rules | 0.616 [0.52–0.72] | 2.27 [1.78–3.17] | 2.40 [1.71–2.79] | 0.145 [0.111–0.180] | 0.099 |
@@ -28,10 +30,10 @@ Mean over fold seeds; 95% group-bootstrap interval in brackets. PR-AUC of a rand
 
 The audit corpus is **stratified on the rule baseline's own prediction**: 100 rows where the rule said `general_discussion` and 20 rows for each class the rule predicted (`scripts/sample_intent_audit.py`). Two consequences:
 
-- Rule recall on a class is close to 1 *by construction*: a row of that class only enters the sample without the rule firing if it comes from the 100-row `general_discussion` stratum. The rule's class-wise F1 below is therefore inflated, and rules-vs-model comparisons are conditional on this design.
+- Oversampling rule-positive strata changes class-wise precision, recall and F1. This can favour the rules; the direction and size of bias cannot be established without the original sampling frame. Rules-vs-model comparisons are conditional on this design, not population estimates.
 - Actionable rows are over-represented (sample base rate 0.30).
 
-**Design-weighted sensitivity analysis (approximate).** Weighting each row by its stratum's population share over its sample count undoes the stratification, using rule-label shares read from `reports/figures/intent_distribution.png (2026-04-27)`, rounded to 0.1%. The rule set may have changed since that chart was made. Estimated population prevalence of actionable comments: **0.15**. Effective sample size 124 of 200.
+**Design-weighted sensitivity analysis (approximate).** Weighting each row by its stratum's assumed population share over its sample count explores sensitivity, using rule-label shares read from `reports/figures/intent_distribution.png (2026-04-27)`, rounded to 0.1%. The rule set may have changed since that chart was made. Estimated population prevalence of actionable comments: **0.15**. Effective sample size 124 of 200.
 
 | Model | Weighted PR-AUC [95%] | Weighted Brier [95%] |
 |---|---|---|
@@ -42,11 +44,12 @@ The audit corpus is **stratified on the rule baseline's own prediction**: 100 ro
 | char_word_svm | 0.426 [0.27–0.61] | 0.132 [0.104–0.166] |
 | embedding | 0.321 [0.22–0.49] | 0.151 [0.119–0.183] |
 
-A random ranking's weighted PR-AUC is about 0.15. These weighted figures are the closer guide to performance on unselected comments, but they rest on rounded chart values and a small effective sample.
+A random ranking's weighted PR-AUC is about 0.15. These weighted figures are illustrative scenarios, not corrected population performance. Rounded chart values do not recover verified sampling probabilities or representativeness.
 
 ## Which differences are supported
 
 Paired differences (row model minus comparison model). A difference is called only when its 95% interval excludes zero; for Brier lower is better.
+These are exploratory pointwise intervals across multiple comparisons, without a family-wise correction. An interval excluding zero is a follow-up hypothesis, not a confirmatory model-selection result. Do not switch the deployed model on this table.
 
 | model | versus | metric | mean_difference | ci_low | ci_high | verdict |
 |---|---|---|---|---|---|---|
@@ -112,7 +115,7 @@ If a reviewer reads only the top k of these 200 comments: expected precision, re
 
 ## Class-wise end-to-end results
 
-Mean over fold seeds. Support is the full corpus count. Two classes have no labels; classes under ~10 rows move by large steps with one prediction. **The `rules` column is inflated by the sampling design above** (for example, 17 of 18 `confusion_barrier` rows were sampled because the rule predicted that class). `majority` routes every row to Stage 2: its constant Stage 1 score, thresholded for F1 on validation, labels everything actionable.
+Mean over fold seeds. Support is the full corpus count. Two classes have no labels; classes under ~10 rows move by large steps with one prediction. **The `rules` column is conditional on the sampling design above** (for example, 17 of 18 `confusion_barrier` rows were sampled because the rule predicted that class). `majority` routes every row to Stage 2: its constant Stage 1 score, thresholded for F1 on validation, labels everything actionable.
 
 | Class | Support | majority F1 | rules F1 | logistic F1 | linear_svm F1 | char_word_svm F1 | embedding F1 |
 |---|---|---|---|---|---|---|---|

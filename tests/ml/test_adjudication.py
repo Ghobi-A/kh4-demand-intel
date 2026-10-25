@@ -44,6 +44,25 @@ def test_same_annotator_twice_is_rejected() -> None:
         pair_annotations(_annotator("ann_a", A), _annotator("ann_a", B))
 
 
+def test_blank_identity_and_unmatched_queues_are_rejected() -> None:
+    with pytest.raises(ValueError, match="nonempty"):
+        pair_annotations(_annotator(" ", A), _annotator("ann_b", B))
+    other = _annotator("ann_b", B)
+    other["queue_id"] = "different_" + other["queue_id"]
+    with pytest.raises(ValueError, match="No shared"):
+        pair_annotations(_annotator("ann_a", A), other)
+
+
+def test_adjudication_cannot_override_agreed_items_or_duplicate_gold() -> None:
+    paired = pair_annotations(_annotator("ann_a", A), _annotator("ann_b", B))
+    queue = adjudication_queue(paired)
+    with pytest.raises(ValueError, match="Duplicate"):
+        finalise(paired, pd.concat([queue, queue]))
+    queue.loc[queue.index[0], "queue_id"] = "q0"  # already agreed
+    with pytest.raises(ValueError, match="already agreed"):
+        finalise(paired, queue)
+
+
 def test_labels_outside_taxonomy_are_rejected() -> None:
     with pytest.raises(ValueError, match="taxonomy"):
         pair_annotations(_annotator("ann_a", A[:-1] + ["spam"]), _annotator("ann_b", B))

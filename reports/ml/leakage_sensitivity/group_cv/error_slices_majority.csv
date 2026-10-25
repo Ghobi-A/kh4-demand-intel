@@ -1,0 +1,10 @@
+dimension,value,n,actionable,recall,false_positive_rate,brier,e2e_accuracy,model
+source,reddit,3,2,1.0,1.0,0.3417529906257563,0.3333333333333333,majority
+source,youtube,197,58,1.0,1.0,0.2214507214183705,0.08121827411167512,majority
+sample_strategy,precision,100,48,1.0,1.0,0.2717960521187815,0.15,majority
+sample_strategy,recall,100,12,1.0,1.0,0.17471445879418113,0.02,majority
+length_bucket,long (>25 words),96,40,1.0,1.0,0.2492747955473054,0.13541666666666666,majority
+length_bucket,medium (9-25 words),65,16,1.0,1.0,0.2197131087392477,0.03076923076923077,majority
+length_bucket,short (<=8 words),39,4,1.0,1.0,0.16511073463343193,0.05128205128205128,majority
+rule_agrees_with_label,rule correct,159,35,1.0,1.0,0.19839578922395776,0.05660377358490566,majority
+rule_agrees_with_label,rule wrong,41,25,1.0,1.0,0.31966147816309726,0.1951219512195122,majority

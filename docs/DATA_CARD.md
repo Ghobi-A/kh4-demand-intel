@@ -39,8 +39,10 @@ is 60/140. Max/min imbalance ratio is 70:1.
   inclusion probabilities were not recorded. The sample base rate of
   actionable comments is 0.30; a design-weighted estimate using the
   population rule-label shares in `reports/figures/intent_distribution.png`
-  gives about 0.15. Rule accuracy measured on this sample is inflated by
-  construction. New queues record inclusion probabilities
+  gives about 0.15. Rule metrics are conditional on this selected sample; their population bias
+  cannot be quantified without the original frame. The chart-weighted 0.15 is
+  an illustrative assumption, not verified population prevalence. New queues
+  record allocation fractions, leaving unknown inclusion probabilities blank
   (`docs/ANNOTATION_PROTOCOL.md`).
 - **Topic/creator bias:** only 23 discussion groups; a handful of videos
   dominate.

@@ -31,7 +31,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
+import importlib.metadata
 import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -106,12 +109,42 @@ def _metrics(y: np.ndarray, p: np.ndarray, w: np.ndarray | None = None) -> dict:
 
 def _wide(oof: pd.DataFrame) -> dict[int, pd.DataFrame]:
     """Per seed: one row per record, a probability column per model."""
+    required = {"seed", "model", "record_id", "parent_id", "true_actionable", "p_actionable"}
+    if oof.empty or not required.issubset(oof.columns):
+        raise ValueError("Paired comparison requires nonempty OOF predictions with group metadata")
+    if oof[list(required)].isna().any().any():
+        raise ValueError("Paired comparison cannot silently drop missing predictions or groups")
+    if oof.duplicated(["seed", "model", "record_id"]).any():
+        raise ValueError("Duplicate model/seed/record predictions")
+    p = oof["p_actionable"].to_numpy(dtype=float)
+    if not np.isfinite(p).all() or ((p < 0) | (p > 1)).any():
+        raise ValueError("Predictions must be finite probabilities in [0, 1]")
+    if not oof["true_actionable"].isin([0, 1]).all():
+        raise ValueError("Actionable targets must be binary")
+    expected_models = set(oof["model"])
+    expected_records = set(oof["record_id"])
+    for (_, _), group in oof.groupby(["seed", "model"]):
+        if set(group["record_id"]) != expected_records:
+            raise ValueError("Models and seeds must score the identical record set")
+    for _, group in oof.groupby("seed"):
+        if set(group["model"]) != expected_models:
+            raise ValueError("Every seed must contain every model")
+    for column in ("parent_id", "true_actionable", "weight"):
+        if column in oof and oof.groupby("record_id")[column].nunique(dropna=False).gt(1).any():
+            raise ValueError(f"Inconsistent {column} across paired predictions")
+    if "weight" in oof and (not np.isfinite(oof["weight"]).all() or oof["weight"].le(0).any()):
+        raise ValueError("Design sensitivity weights must be finite and positive")
+    if "fold" in oof:
+        if oof.groupby(["seed", "record_id"])["fold"].nunique().gt(1).any():
+            raise ValueError("Models must use identical folds")
+        if oof.groupby(["seed", "parent_id"])["fold"].nunique().gt(1).any():
+            raise ValueError("Discussion groups cross outer folds")
     frames = {}
     for seed, group in oof.groupby("seed"):
-        wide = group.pivot_table(index="record_id", columns="model", values="p_actionable")
+        wide = group.pivot(index="record_id", columns="model", values="p_actionable")
         columns = ["parent_id", "true_actionable"] + (["weight"] if "weight" in group else [])
         meta = group.drop_duplicates("record_id").set_index("record_id")[columns]
-        frames[int(seed)] = wide.join(meta).dropna()
+        frames[int(seed)] = wide.join(meta)
     return frames
 
 
@@ -289,9 +322,18 @@ def write_report(points, draws, pairs, per_class, errors, confusion, meta, path:
         "by `python -m src.ml.model_comparison"
         + (" --with-embedding" if "embedding" in models else "")
         + f"` on {meta['generated_at'][:10]} over the {meta['rows']}-row single-annotator "
-        f"audit corpus ({meta['groups']} discussion groups, dataset hash `{meta['dataset_hash']}`). "
+        f"audit corpus ({meta['groups']} splitting units, dataset hash `{meta['dataset_hash']}`). "
         "It is cross-validated development evaluation, not final held-out performance: the "
         "taxonomy, rules and model families were designed around these rows.",
+        "",
+        f"Execution mode: `{meta.get('execution_mode', 'refit')}`. Prediction replay "
+        "recomputes metrics and intervals from saved OOF scores; it does not verify "
+        "encoder downloads or model refitting. Package versions and OOF SHA-256 are "
+        "recorded in the companion summary.json.",
+        f"Near-duplicate-connected groups linked before splitting: "
+        f"**{'yes' if meta.get('near_duplicate_linking') else 'no'}**. Original PR #26 "
+        "scores hold out discussion IDs but contain one cross-group near-duplicate pair; "
+        "consult the separate linked-group sensitivity before interpreting the ordering.",
         "",
         "## Protocol",
         "",
@@ -303,7 +345,8 @@ def write_report(points, draws, pairs, per_class, errors, confusion, meta, path:
         "- TF-IDF vocabularies and model weights are fitted per fold (scikit-learn pipelines).",
         f"- Uncertainty: {meta['n_bootstrap']} paired group-bootstrap replicates (groups "
         "resampled once per replicate, all models scored on the same resample, averaged over "
-        "fold seeds).",
+        "fold seeds). These intervals condition on the fitted OOF predictions; they do not "
+        "refit models in each replicate or account for model-selection uncertainty.",
         f"- Relevance target for ranking metrics: actionable vs general discussion "
         f"(base rate {base_rate:.2f}, {meta['positives']} actionable rows). Ties are broken in "
         "expectation.",
@@ -321,7 +364,7 @@ def write_report(points, draws, pairs, per_class, errors, confusion, meta, path:
         "Mean over fold seeds; 95% group-bootstrap interval in brackets. PR-AUC of a random "
         f"ranking equals the base rate ({base_rate:.2f}); Lift@k of random review is 1.",
         "",
-        "| Model | PR-AUC | Lift@20 (top 10%) | Lift@60 (= #positives) | Brier | ECE |",
+        "| Model | PR-AUC | Lift@20 (top 10%) | Lift@60 (= #positives) | Brier | ECE (reference seed) |",
         "|---|---|---|---|---|---|",
     ]
     for m in models:
@@ -340,14 +383,14 @@ def write_report(points, draws, pairs, per_class, errors, confusion, meta, path:
         "where the rule said `general_discussion` and 20 rows for each class the rule "
         "predicted (`scripts/sample_intent_audit.py`). Two consequences:",
         "",
-        "- Rule recall on a class is close to 1 *by construction*: a row of that class only "
-        "enters the sample without the rule firing if it comes from the 100-row "
-        "`general_discussion` stratum. The rule's class-wise F1 below is therefore inflated, "
-        "and rules-vs-model comparisons are conditional on this design.",
+        "- Oversampling rule-positive strata changes class-wise precision, recall and F1. "
+        "This can favour the rules; the direction and size of bias cannot be established "
+        "without the original sampling frame. Rules-vs-model comparisons are conditional "
+        "on this design, not population estimates.",
         f"- Actionable rows are over-represented (sample base rate {base_rate:.2f}).",
         "",
         "**Design-weighted sensitivity analysis (approximate).** Weighting each row by its "
-        "stratum's population share over its sample count undoes the stratification, using "
+        "stratum's assumed population share over its sample count explores sensitivity, using "
         f"rule-label shares read from `{meta['design_source']}`, rounded to 0.1%. The rule set "
         "may have changed since that chart was made. Estimated population prevalence of "
         f"actionable comments: **{meta['weighted_base_rate']:.2f}**. Effective sample size "
@@ -365,13 +408,16 @@ def write_report(points, draws, pairs, per_class, errors, confusion, meta, path:
     lines += [
         "",
         f"A random ranking's weighted PR-AUC is about {meta['weighted_base_rate']:.2f}. These "
-        "weighted figures are the closer guide to performance on unselected comments, but "
-        "they rest on rounded chart values and a small effective sample.",
+        "weighted figures are illustrative scenarios, not corrected population performance. "
+        "Rounded chart values do not recover verified sampling probabilities or representativeness.",
         "",
         "## Which differences are supported",
         "",
         "Paired differences (row model minus comparison model). A difference is called only "
         "when its 95% interval excludes zero; for Brier lower is better.",
+        "These are exploratory pointwise intervals across multiple comparisons, without "
+        "a family-wise correction. An interval excluding zero is a follow-up hypothesis, "
+        "not a confirmatory model-selection result. Do not switch the deployed model on this table.",
         "",
     ]
     show = pairs.copy()
@@ -406,7 +452,7 @@ def write_report(points, draws, pairs, per_class, errors, confusion, meta, path:
         "",
         "Mean over fold seeds. Support is the full corpus count. Two classes have no labels; "
         "classes under ~10 rows move by large steps with one prediction. **The `rules` column "
-        "is inflated by the sampling design above** (for example, 17 of 18 "
+        "is conditional on the sampling design above** (for example, 17 of 18 "
         "`confusion_barrier` rows were sampled because the rule predicted that class). "
         "`majority` routes every row to Stage 2: its constant Stage 1 score, thresholded for "
         "F1 on validation, labels everything actionable.",
@@ -498,15 +544,50 @@ def run_comparison(
     n_boot: int = N_BOOTSTRAP,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     report_path: Path = DEFAULT_REPORT_PATH,
+    oof_path: Path | None = None,
+    link_near_duplicates: bool = False,
 ) -> dict:
     output_dir = Path(output_dir)
+    is_replay = oof_path is not None
     output_dir.mkdir(parents=True, exist_ok=True)
-    cv = run_group_cv(
-        models=models, seeds=seeds, n_folds=n_folds, n_boot=200,
-        output_dir=output_dir / "group_cv", report_path=output_dir / "group_cv" / "report.md",
-    )
-    oof = pd.read_csv(output_dir / "group_cv" / "oof_predictions.csv")
     labelled = load_labelled_data()
+    duplicate_audit = None
+    if link_near_duplicates:
+        from src.ml.leakage import link_near_duplicate_groups
+
+        labelled, duplicate_audit = link_near_duplicate_groups(labelled)
+    if oof_path is None:
+        cv = run_group_cv(
+            models=models, seeds=seeds, n_folds=n_folds, n_boot=200,
+            output_dir=output_dir / "group_cv", report_path=output_dir / "group_cv" / "report.md",
+            link_near_duplicates=link_near_duplicates,
+        )
+        oof_path = output_dir / "group_cv" / "oof_predictions.csv"
+    else:
+        # Recompute comparisons from existing predictions without downloading an encoder.
+        # This verifies the analysis, not training reproducibility.
+        cv = {
+            "metadata": json.loads((Path(oof_path).parent / "summary.json").read_text()),
+            "per_class": pd.read_csv(Path(oof_path).parent / "per_class.csv"),
+        }
+        saved = cv["metadata"]
+        if (saved["dataset_hash"] != dataset_hash(labelled)
+                or saved["n_folds"] != n_folds
+                or bool(saved.get("near_duplicate_linking")) != link_near_duplicates
+                or list(saved["seeds"]) != list(seeds)):
+            raise ValueError("Saved OOF metadata does not match the requested corpus/folds/seeds")
+    oof = pd.read_csv(oof_path)
+    oof = oof[oof["model"].isin(models) & oof["seed"].isin(seeds)].copy()
+    if set(oof["model"]) != set(models) or set(oof["seed"]) != set(seeds):
+        raise ValueError("Missing requested models or seeds in saved OOF predictions")
+    truth = labelled.set_index("record_id")
+    if set(oof["record_id"]) != set(truth.index):
+        raise ValueError("OOF record set does not match the labelled corpus")
+    for column, actual in [("parent_id", "parent_id"), ("corrected_label", "corrected_label"),
+                           ("true_actionable", "actionable")]:
+        expected = oof["record_id"].map(truth[actual])
+        if not oof[column].eq(expected).all():
+            raise ValueError(f"OOF {column} does not match the labelled corpus")
     raw = pd.read_csv("reports/audits/intent_audit_corrected.csv")
     weights = design_weights(labelled, raw)
     oof["weight"] = oof["record_id"].astype(str).map(dict(zip(labelled["record_id"].astype(str), weights)))
@@ -529,6 +610,15 @@ def run_comparison(
         "seeds": list(seeds),
         "n_folds": n_folds,
         "n_bootstrap": n_boot,
+        "near_duplicate_linking": duplicate_audit,
+        "execution_mode": "prediction_replay" if is_replay else "refit",
+        "oof_sha256": hashlib.sha256(Path(oof_path).read_bytes()).hexdigest(),
+        "comparison_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "bootstrap_seed": 0,
+        "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        "git_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()),
+        "package_versions": {name: importlib.metadata.version(name)
+                             for name in ("numpy", "pandas", "scikit-learn", "scipy")},
         "ece": {m: cv["metadata"]["summaries"][m]["ece_10_bins"] for m in models},
         "design_source": DESIGN_SOURCE,
         "design_shares": RULE_LABEL_POPULATION_SHARE,
@@ -541,6 +631,11 @@ def run_comparison(
 
         meta["embedding_model"] = DEFAULT_EMBEDDING_MODEL
         meta["embedding_revision"] = DEFAULT_EMBEDDING_REVISION
+        if not is_replay:
+            meta["package_versions"].update({
+                name: importlib.metadata.version(name)
+                for name in ("torch", "sentence-transformers", "transformers", "huggingface-hub")
+            })
 
     points.to_csv(output_dir / "point_estimates.csv")
     pairs.to_csv(output_dir / "paired_differences.csv", index=False)
@@ -561,10 +656,15 @@ def main() -> None:
     parser.add_argument("--bootstrap", type=int, default=N_BOOTSTRAP)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT_PATH)
+    parser.add_argument("--oof", type=Path,
+                        help="Replay saved group_cv/oof_predictions.csv and sibling summary.json; no refit")
+    parser.add_argument("--link-near-duplicates", action="store_true",
+                        help="Sensitivity: keep text-connected discussion groups in the same folds")
     args = parser.parse_args()
     models = list(args.models) + (["embedding"] if args.with_embedding else [])
     result = run_comparison(models=models, seeds=args.seeds, n_boot=args.bootstrap,
-                            output_dir=args.output_dir, report_path=args.report)
+                            output_dir=args.output_dir, report_path=args.report, oof_path=args.oof,
+                            link_near_duplicates=args.link_near_duplicates)
     cols = ["pr_auc", "lift_at_20", "brier"]
     print(result["points"][cols].round(3).to_string())
     print(result["pairs"][["model", "versus", "metric", "verdict"]].to_string(index=False))

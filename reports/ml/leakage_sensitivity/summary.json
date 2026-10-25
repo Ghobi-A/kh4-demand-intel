@@ -1,0 +1,66 @@
+{
+  "generated_at": "2026-10-25T00:51:10.220805+00:00",
+  "evaluation_status": "development_preliminary",
+  "dataset_hash": "450745418479c703",
+  "rows": 200,
+  "groups": 22,
+  "positives": 60,
+  "base_rate": 0.3,
+  "models": [
+    "majority",
+    "rules",
+    "logistic",
+    "linear_svm",
+    "char_word_svm"
+  ],
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "n_folds": 5,
+  "n_bootstrap": 1000,
+  "near_duplicate_linking": {
+    "threshold": 0.8,
+    "original_groups": 23,
+    "effective_groups": 22,
+    "cross_group_pairs": [
+      {
+        "record_a": "UgzIsA1kRlC7XwIQDp14AaABAg",
+        "record_b": "UgyEMYG859pGoQSpmGx4AaABAg",
+        "similarity": 0.8499005645094531
+      }
+    ]
+  },
+  "execution_mode": "refit",
+  "oof_sha256": "e80f7c477e219b308b868648ad9f6bb8d49b13005dc14845ac0f1a3e063fc6c4",
+  "comparison_source_sha256": "2de114035f53e86e54bb585c2af0696eb54f7ef4604cdeb3920289612a71bf5e",
+  "bootstrap_seed": 0,
+  "git_commit": "c80400d75634a5b103176f433bd810936c33990b",
+  "git_dirty": true,
+  "package_versions": {
+    "numpy": "2.5.4",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.9.1",
+    "scipy": "1.18.1"
+  },
+  "ece": {
+    "majority": 0.0701500891898573,
+    "rules": 0.12177855879185613,
+    "logistic": 0.11425596808902164,
+    "linear_svm": 0.09213095781306112,
+    "char_word_svm": 0.0978602460117518
+  },
+  "design_source": "reports/figures/intent_distribution.png (2026-04-27)",
+  "design_shares": {
+    "general_discussion": 0.884,
+    "nostalgia_reactivation": 0.065,
+    "frustrated_demand": 0.025,
+    "new_customer_interest": 0.01,
+    "high_intent": 0.01,
+    "confusion_barrier": 0.006
+  },
+  "weighted_base_rate": 0.15147999999999998,
+  "max_weight": 1.768,
+  "effective_sample_size": 123.93324459713021
+}
