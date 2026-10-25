@@ -50,3 +50,20 @@ def test_live_inference_banner_states_the_supervised_method() -> None:
     banners = [str(s.value) for s in app.success]
     assert any("Active inference method: supervised two-stage" in b for b in banners), banners
     assert not any("rule baseline (fallback)" in str(w.value) for w in app.warning)
+
+
+def test_comparison_and_error_filters_survive_interaction() -> None:
+    from streamlit.testing.v1 import AppTest
+
+    app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=120).run()
+    app.radio(key="comparison_protocol").set_value("Near-duplicate linked groups (classical models)").run()
+    assert "embedding" not in app.selectbox(key="paired_reference").options
+    app.selectbox(key="paired_reference").select("char_word_svm")
+    app.selectbox(key="paired_metric").select("weighted_pr_auc")
+    app.select_slider(key="review_budget").set_value(60)
+    app.selectbox(key="error_model").select("char_word_svm")
+    app.selectbox(key="error_kind").select("false_negative")
+    app.run()
+    assert not app.exception
+    assert not [e.value for e in app.error if "could not be rendered" in str(e.value)]
+    assert any("assumption sensitivity" in str(w.value) for w in app.warning)

@@ -72,6 +72,16 @@ unmodellable rather than fitted anyway.
 
 ## Validation design
 
+**Scope of leakage checks.** The rolling-origin tests below apply to forecasting
+an already-built proxy series. The NLP measurement model is not refitted or
+frozen as of each historical origin; group-aware OOF prevents discussion overlap
+but does not enforce temporal availability of labels, vocabulary or calibration.
+Consequently this is not a validated end-to-end prospective forecasting system.
+Before claiming that, freeze the measurement model before the evaluation window
+or rebuild each origin's proxy using only labels and artefacts available then,
+with versioned acquisition snapshots. The missing canonical data and incomplete
+annotation timestamps currently block that verification.
+
 **Rolling-origin (walk-forward) only.** A random split lets a model learn from
 weeks after the one it predicts, which no real forecast can do.
 

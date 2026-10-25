@@ -120,4 +120,25 @@ def test_group_cap_and_inclusion_probability_are_recorded() -> None:
     assert (queue["parent_id"].value_counts() <= 3).all()
     assert len(queue) == 5  # 3 from the big group + 2 singletons; the shortfall is reported
     assert report[STRATUM_RANDOM]["shortfall"] == 3
-    assert queue["inclusion_probability"].iloc[0] == pytest.approx(5 / 12)
+    assert queue["selection_fraction"].iloc[0] == pytest.approx(5 / 12)
+    assert queue["inclusion_probability"].isna().all()
+
+
+def test_only_uncapped_first_random_control_has_known_probability() -> None:
+    scored = score_pool(prepare_pool(_pool(), _labelled())[0])
+    queue, _ = select_queue(scored, _labelled(), quotas={STRATUM_RANDOM: 2, STRATUM_REDDIT: 2},
+                            max_per_group=None)
+    random = queue[queue["stratum"] == STRATUM_RANDOM]
+    assert random["inclusion_probability"].eq(2 / len(scored)).all()
+    assert queue.loc[queue["stratum"] == STRATUM_REDDIT, "inclusion_probability"].isna().all()
+
+
+def test_frozen_groups_and_similar_text_are_excluded_from_training_queue() -> None:
+    pool = _pool()
+    frozen = pd.DataFrame({"text": ["anyone else replaying the whole series"],
+                           "source": ["youtube"], "parent_id": ["c"]})
+    frame, excluded = prepare_pool(pool, _labelled(), frozen=frozen)
+    assert "yt:c" not in set(frame["parent_id"])
+    assert "anyone else replaying the whole series" not in set(frame["text"])
+    assert excluded["frozen_or_unknown_group"] == 1
+    assert excluded["near_duplicate_of_frozen"] == 1

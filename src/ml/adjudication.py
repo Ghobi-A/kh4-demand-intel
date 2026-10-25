@@ -49,8 +49,12 @@ def _load_annotations(frame: pd.DataFrame, name: str) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Annotator file {name} lacks columns {sorted(missing)}")
     out = frame.copy()
+    for column in ("queue_id", "annotator_id"):
+        out[column] = out[column].fillna("").astype(str).str.strip()
     out["human_label"] = out["human_label"].fillna("").astype(str).str.strip()
     out = out[out["human_label"] != ""]
+    if out.empty or out[["queue_id", "annotator_id"]].eq("").any().any():
+        raise ValueError(f"{name}: completed rows need nonempty queue_id and annotator_id")
     bad = ~out["human_label"].isin(TAXONOMY)
     if bad.any():
         raise ValueError(
@@ -74,6 +78,12 @@ def pair_annotations(a: pd.DataFrame, b: pd.DataFrame) -> pd.DataFrame:
     keep = ["queue_id", "human_label", "annotator_id"]
     extra = [c for c in ("text", "parent_id", "source", "stratum") if c in a.columns]
     paired = a[keep + extra].merge(b[keep], on="queue_id", suffixes=("_a", "_b"))
+    if paired.empty:
+        raise ValueError("No shared completed queue items between annotators")
+    if "text" in a and "text" in b:
+        joined = a[["queue_id", "text"]].merge(b[["queue_id", "text"]], on="queue_id")
+        if not joined["text_x"].equals(joined["text_y"]):
+            raise ValueError("Shared queue IDs refer to different text")
     return paired
 
 
@@ -184,6 +194,11 @@ def finalise(paired: pd.DataFrame, adjudicated: pd.DataFrame, version: str | Non
     agreed["rationale"] = ""
 
     adj = adjudicated.copy()
+    if adj["queue_id"].duplicated().any():
+        raise ValueError("Duplicate adjudication queue_id rows")
+    disputed_ids = set(paired.loc[paired["human_label_a"] != paired["human_label_b"], "queue_id"])
+    if not set(adj["queue_id"]).issubset(disputed_ids):
+        raise ValueError("Adjudication contains unknown or already agreed queue IDs")
     for column in ("adjudicated_label", "adjudicator_id", "rationale"):
         adj[column] = adj[column].fillna("").astype(str).str.strip()
     problems = {

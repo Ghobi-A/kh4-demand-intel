@@ -1,0 +1,82 @@
+{
+  "generated_at": "2026-10-25T00:50:21.060811+00:00",
+  "pool_path": "data/demo/signals_scored_portfolio.csv",
+  "pool_kind": "demo_extract",
+  "pool_hash": "411aadad8ecfbf63",
+  "frozen_exclusion": null,
+  "pool_rows": 304,
+  "eligible_rows": 139,
+  "excluded": {
+    "empty_text": 0,
+    "already_labelled": 160,
+    "duplicate_in_pool": 0,
+    "near_duplicate_of_labelled": 5
+  },
+  "rare_classes_targeted": [
+    "content_drought_fatigue",
+    "expectation_decay",
+    "high_intent",
+    "new_customer_interest",
+    "nostalgia_reactivation"
+  ],
+  "strata": {
+    "random_control": {
+      "quota": 25,
+      "eligible": 139,
+      "selected": 25,
+      "shortfall": 0,
+      "selection_fraction": 0.17985611510791366,
+      "inclusion_probability": null
+    },
+    "missing_class_candidate": {
+      "quota": 40,
+      "eligible": 18,
+      "selected": 16,
+      "shortfall": 24,
+      "selection_fraction": 0.8888888888888888,
+      "inclusion_probability": null
+    },
+    "reddit": {
+      "quota": 30,
+      "eligible": 2,
+      "selected": 2,
+      "shortfall": 28,
+      "selection_fraction": 1.0,
+      "inclusion_probability": null
+    },
+    "unseen_group": {
+      "quota": 25,
+      "eligible": 0,
+      "selected": 0,
+      "shortfall": 25,
+      "selection_fraction": null,
+      "inclusion_probability": null
+    },
+    "model_disagreement": {
+      "quota": 30,
+      "eligible": 74,
+      "selected": 30,
+      "shortfall": 0,
+      "selection_fraction": 0.40540540540540543,
+      "inclusion_probability": null
+    }
+  },
+  "queue_rows": 73,
+  "double_annotation_rows": 11,
+  "seed": 42,
+  "max_per_group": 5,
+  "double_annotation_share": 0.15,
+  "design_note": "Training acquisition queue, not a representative evaluation sample. selection_fraction is selected/eligible, not an inverse-probability weight. inclusion_probability is known only for an uncapped first uniform random-control draw; capped and targeted rows have unknown inclusion probabilities. Do not use this mixed queue to estimate population prevalence or final performance.",
+  "model": {
+    "available": true,
+    "model_name": "logistic",
+    "dataset_hash": "450745418479c703",
+    "threshold": 0.3523235947665243
+  },
+  "label_status": "pending_human_review",
+  "notes": [
+    "No label in this queue is filled in. Rule and model outputs are kept in annotation_queue_provenance.csv and must not be shown to annotators.",
+    "Completed batches are validated with `python -m src.ml.annotation_queue validate`; they are never merged into the labelled corpus automatically.",
+    "Built from the 304-row demo extract because the canonical signal set is absent. This pool is small and YouTube-heavy, so most strata cannot be filled; rebuild from data/processed/signals_scored.csv for the real batch."
+  ]
+}

@@ -356,14 +356,78 @@ def render_model_performance_tab() -> None:
     )
 
 
+def paired_view(pairs: pd.DataFrame, reference: str, metric: str) -> pd.DataFrame:
+    """Orient saved paired differences to the chosen reference, preserving intervals."""
+    frame = pairs[pairs["metric"] == metric].copy()
+    reverse = frame["model"] == reference
+    flipped = frame[reverse].copy()
+    flipped["model"] = frame.loc[reverse, "versus"]
+    flipped["versus"] = reference
+    flipped["mean_difference"] = -frame.loc[reverse, "mean_difference"]
+    flipped["ci_low"] = -frame.loc[reverse, "ci_high"]
+    flipped["ci_high"] = -frame.loc[reverse, "ci_low"]
+    return pd.concat([frame[frame["versus"] == reference], flipped], ignore_index=True)
+
+
 def render_model_comparison_tab() -> None:
     st.header("Model comparison")
+    st.caption("Decision: keep the current model for a research demo; collect evidence before deployment.")
+    comparison_dir = ML_REPORT_DIR / "model_comparison"
+    linked_dir = ML_REPORT_DIR / "leakage_sensitivity"
+    st.warning(
+        "Original PR #26 folds contain one cross-video near-duplicate pair. "
+        "Use the linked-group sensitivity to assess robustness; no result here is final held-out performance."
+    )
+    if (linked_dir / "paired_differences.csv").exists():
+        protocol = st.radio("Evaluation protocol", ["Original PR folds (six models)",
+                                                   "Near-duplicate linked groups (classical models)"],
+                            key="comparison_protocol")
+        if protocol.startswith("Near-duplicate"):
+            comparison_dir = linked_dir
+    pairs_path = comparison_dir / "paired_differences.csv"
+    points_path = comparison_dir / "point_estimates.csv"
+    if pairs_path.exists() and points_path.exists():
+        import altair as alt
+
+        pairs = load_csv(pairs_path)
+        points = load_csv(points_path)
+        st.subheader("Does a model improve on the baseline?")
+        col1, col2 = st.columns(2)
+        references = [m for m in ["rules", "logistic", "linear_svm", "char_word_svm", "embedding"]
+                      if m in set(points["model"])]
+        reference = col1.selectbox("Compare against", references,
+                                   key="paired_reference")
+        metric = col2.selectbox("Comparison metric", ["pr_auc", "lift_at_20", "brier", "weighted_pr_auc"],
+                                key="paired_metric")
+        view = paired_view(pairs, reference, metric)
+        st.caption(
+            "Difference = model minus baseline. Lower Brier is better; higher ranking metrics are better. "
+            "Intervals crossing zero leave the ordering unresolved. Pointwise 95% paired group-bootstrap "
+            "intervals are exploratory: multiple comparisons and development selection limit any claim."
+        )
+        if metric == "weighted_pr_auc":
+            st.warning("Chart-derived weighting is an assumption sensitivity analysis, not population performance.")
+        base = alt.Chart(view).encode(y=alt.Y("model:N", title=None))
+        interval = base.mark_rule(strokeWidth=3).encode(x="ci_low:Q", x2="ci_high:Q")
+        dot = base.mark_point(filled=True, size=90).encode(
+            x=alt.X("mean_difference:Q", title=f"Difference in {metric}"),
+            tooltip=["model", "mean_difference", "ci_low", "ci_high"],
+        )
+        zero = alt.Chart(pd.DataFrame({"zero": [0]})).mark_rule(strokeDash=[4, 4]).encode(x="zero:Q")
+        st.altair_chart(interval + dot + zero, width="stretch")
+        st.subheader("What can a fixed review budget find?")
+        budget = st.select_slider("Comments reviewed out of 200", options=[10, 20, 30, 60], value=20,
+                                  key="review_budget")
+        cols = ["model", f"precision_at_{budget}", f"recall_at_{budget}", f"lift_at_{budget}"]
+        st.dataframe(points[cols], hide_index=True, width="stretch")
+        st.caption("Expected tie handling; observed on the selected 200-row development corpus. These are not forecasts of reviewer productivity in the wild.")
     # The paired, group-held-out comparison is the evidence the README and case
     # study cite, so it leads; the older per-split benchmark sits below it.
-    _show_markdown_report(
-        ML_REPORT_DIR / "evaluation_report.md",
-        "No paired evaluation report yet. Run `python -m src.ml.model_comparison`.",
-    )
+    with st.expander("Protocol, uncertainty and full evaluation report"):
+        _show_markdown_report(
+            (comparison_dir / "report.md") if comparison_dir == linked_dir else ML_REPORT_DIR / "evaluation_report.md",
+            "No paired evaluation report yet. Run `python -m src.ml.model_comparison`.",
+        )
     with st.expander("Repeated group-holdout benchmark (per-split view)"):
         _show_markdown_report(
             ML_REPORT_DIR / "model_comparison.md",
@@ -378,6 +442,23 @@ def render_model_comparison_tab() -> None:
 
 def render_error_analysis_tab() -> None:
     st.header("Error analysis")
+    paired_errors = ML_REPORT_DIR / "model_comparison" / "errors.csv"
+    if paired_errors.exists():
+        errors = load_csv(paired_errors)
+        st.caption("Group-held-out errors at the reference seed. Labels are from one human annotator; disagreement may reveal a label problem and requires review.")
+        col1, col2, col3 = st.columns(3)
+        model = col1.selectbox("Error model", sorted(errors["model"].unique()), key="error_model")
+        kind = col2.selectbox("Error type", ["All", "false_positive", "false_negative"], key="error_kind")
+        source = col3.selectbox("Error source", ["All"] + sorted(errors["source"].unique()), key="error_source")
+        selected = errors[errors["model"] == model]
+        if kind != "All":
+            selected = selected[selected["error_type"] == kind]
+        if source != "All":
+            selected = selected[selected["source"] == source]
+        st.dataframe(selected[["error_type", "source", "corrected_label", "pred_label", "p_actionable", "words", "text"]],
+                     hide_index=True, width="stretch")
+        st.info("Use errors to request blind human adjudication. Do not automatically overwrite labels or interpret missing Reddit errors as evidence of good Reddit performance.")
+        return
     tables_dir = ML_REPORT_DIR / "tables"
     shown = False
     for filename, title in [
@@ -1045,6 +1126,12 @@ def _ci(interval) -> str:
 def render_overview_tab() -> None:
     st.header("Overview")
     data = overview_data()
+    st.markdown("### Can community discussion help a marketer decide what to investigate?")
+    st.markdown(
+        "This case study separates enthusiasm from expressed intent, ranks comments for human "
+        "review, and tests whether discussion proxies can be forecast. Start here, explore "
+        "paired model comparisons, then inspect errors before trying a scenario."
+    )
 
     status = st.columns(3)
     status[0].metric("NLP models", "Development")
@@ -1089,7 +1176,7 @@ def render_overview_tab() -> None:
     ranking = data["ranking"]
     if ranking:
         findings.append(
-            f"**Actionable-signal ranking beats random review, with wide uncertainty.** "
+            f"**Actionable-signal ranking is promising in development, with wide uncertainty.** "
             f"Out-of-fold, group-held-out PR-AUC {ranking['pr_auc']:.2f}{_ci(ranking['pr_auc_95'])} "
             f"against a base rate of {ranking['base_rate']:.2f}; Lift@10% "
             f"{ranking['lift_at_10pct']:.1f}{_ci(ranking['lift_95'])} ({ranking['model']})."
@@ -1102,6 +1189,8 @@ def render_overview_tab() -> None:
                 if "supervised_compared_with_rules" in ranking
                 else ""
             )
+            + " These original folds contain a cross-video near-duplicate pair; the Model "
+            "Comparison tab separates them from the linked-group sensitivity."
         )
     sensitivity = data["forecast_sensitivity"]
     if sensitivity.get("available"):
@@ -1136,6 +1225,21 @@ def render_overview_tab() -> None:
         )
     for item in BLOCKED_WORK:
         st.markdown(f"- {item}")
+
+    with st.expander("From a signal to a marketing decision", expanded=True):
+        st.dataframe(pd.DataFrame([
+            {"Observed signal": "Confusion about where to start", "Review action": "Inspect examples; test onboarding content", "Evidence still needed": "Representative labels and a randomized content test"},
+            {"Observed signal": "Frustration during a news gap", "Review action": "Review communication themes", "Evidence still needed": "Repeated observations across independent threads"},
+            {"Observed signal": "Explicit interest or nostalgia", "Review action": "Form a reactivation research hypothesis", "Evidence still needed": "Consent-based first-party wishlist or conversion outcomes"},
+        ]), hide_index=True, width="stretch")
+    with st.expander("What would justify deployment?"):
+        st.markdown(
+            "1. Freeze representative unseen discussion groups before further model choices.\n"
+            "2. Obtain independent human labels and adjudicate disagreements, including missing classes and Reddit.\n"
+            "3. Evaluate once under a predeclared ranking budget, calibration tolerance and review cost.\n"
+            "4. Validate temporal stability and a prospective human-review pilot with monitoring and rollback.\n"
+            "5. Use first-party outcomes and controlled experiments before making claims about sales or media ROI."
+        )
 
     st.subheader("Evidence")
     links = {

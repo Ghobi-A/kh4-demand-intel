@@ -81,3 +81,21 @@ def test_paired_comparison_calls_only_supported_differences() -> None:
     assert len(verdict) == len(pairs)  # each unordered pair reported once
     assert verdict[frozenset(("char_word_svm", "rules"))].startswith("char_word_svm better")
     assert verdict[frozenset(("char_word_svm", "linear_svm"))] == "not distinguishable"
+
+
+@pytest.mark.parametrize("corruption", ["missing", "duplicate", "target", "group", "probability"])
+def test_paired_comparison_refuses_incomparable_predictions(corruption) -> None:
+    y = np.array([0, 1] * 10)
+    frame = _oof({"rules": np.full(20, 0.3), "logistic": np.full(20, 0.4)}, y)
+    if corruption == "missing":
+        frame = frame.iloc[:-1]
+    elif corruption == "duplicate":
+        frame = pd.concat([frame, frame.iloc[:1]])
+    elif corruption == "target":
+        frame.loc[0, "true_actionable"] = 1
+    elif corruption == "group":
+        frame.loc[0, "parent_id"] = "wrong"
+    else:
+        frame.loc[0, "p_actionable"] = np.nan
+    with pytest.raises(ValueError):
+        paired_bootstrap(frame, ["rules", "logistic"], n_boot=2)

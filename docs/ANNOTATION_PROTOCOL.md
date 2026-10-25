@@ -11,7 +11,7 @@ Measured in `reports/data_quality/dataset_audit.md` and `reports/ml/evaluation_r
 
 | Problem | Evidence | Protocol response |
 |---|---|---|
-| The sample is stratified on the rule classifier's own output (100 rule-general + 20 per rule class), and the design weights were never recorded | `scripts/sample_intent_audit.py`; rule class-wise F1 is inflated by construction | Every queued row records its stratum and inclusion probability; a uniform random stratum is always included |
+| The sample is stratified on the rule classifier's own output (100 rule-general + 20 per rule class), and the design weights were never recorded | `scripts/sample_intent_audit.py`; rule class-wise F1 is conditional on the selected sample | Every queued row records its stratum and allocation fraction; capped/targeted acquisition has unknown inclusion probabilities |
 | One annotator; first-pass vs final κ = 0.30 | `dataset_audit.md` | Two independent annotators on every evaluation item; a third person adjudicates |
 | Two classes have zero rows; three have fewer than 10 | `labelled_data_report.md` | Rare-class candidate stratum with quotas; stop rules per class (below) |
 | 197/200 rows are YouTube; 23 groups; top 3 groups hold 34% of rows | `dataset_audit.md` | Group-level sampling with a per-group cap and a Reddit quota |
@@ -25,8 +25,10 @@ Measured in `reports/data_quality/dataset_audit.md` and `reports/ml/evaluation_r
 | **Training** | Grow rare classes and new platforms | Stratified queue (`annotation_queue build`) | Single annotator + 15% overlap for drift in agreement | ≈300 comments per round |
 
 The evaluation tier is drawn **first** and its groups are excluded from every later
-training batch (`annotation_queue build` already excludes rows and near-duplicates of
-labelled rows; pass the frozen-test file through the same exclusion).
+training batch using `annotation_queue build --exclude-frozen frozen_test.csv`. That file needs
+`text`, `source` and `parent_id`; the tool excludes whole groups, unknown-group
+candidates and near-duplicate text. Keep the file private and immutable. This is
+a training exclusion safeguard, not a test-set sampler or final evaluation runner.
 
 ## Sampling frame
 
@@ -46,15 +48,24 @@ and authors. Splits are by group, so sampling should be too.
    estimated with Horvitz–Thompson weights. This is the step the original sample lacked.
 
 **Training tier: stratified queue.** `python -m src.ml.annotation_queue build` draws
-quotas in this order (all recorded per row with `inclusion_probability`):
+quotas in this order (recorded per row with `selection_fraction`):
 
 | Stratum | Default quota | Why |
 |---|---|---|
-| `random_control` | 25 | Drawn first, uniformly: unbiased prevalence and an error audit of the other strata |
+| `random_control` | 25 | Random order first; with the group cap this is a diversity control, not an unbiased prevalence sample |
 | `missing_class_candidate` | 40 | Rule predicts a class with fewer than 10 labels (including the two empty ones) |
 | `reddit` | 30 | Platform currently 3/200 |
 | `unseen_group` | 25 | Groups absent from the labelled corpus |
 | `model_disagreement` | 30 | Rule/model disagreement or near-threshold probability |
+
+This is a **training acquisition queue**, not a representative evaluation sample.
+`selection_fraction = selected / eligible` describes allocation only. Group caps,
+priority ordering and overlapping sequential strata invalidate treating it as a
+row inclusion probability. `inclusion_probability` is blank except for an uncapped,
+first uniform random-control draw. Never inverse-weight the mixed training queue
+or infer population prevalence from its default random-control stratum. The
+two-stage evaluation sampler and design-weighted final scorer above are **proposed,
+not implemented**; they need a verified sampling frame and frozen protocol.
 
 Constraints: at most 5 comments per group per batch (`--max-per-group`), and rows that
 duplicate or near-duplicate (TF-IDF cosine ≥ 0.80) a labelled row are excluded. A
@@ -139,6 +150,7 @@ no class with κ < 0.60 that has not been through a guide revision.
 ## After a round
 
 1. `python -m src.ml.dataset_audit`: support by class, source and group.
+   Store generated reports in a new output directory for each round.
 2. Merge accepted gold candidates in a reviewed commit with a new `annotation_version`.
 3. `python -m src.ml.model_comparison --with-embedding` on the training tier, then a
    **single** scoring run on the frozen evaluation tier with `evaluation_status =

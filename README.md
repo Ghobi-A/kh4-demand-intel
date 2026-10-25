@@ -24,6 +24,10 @@ discussion.**
 
 ---
 
+The follow-up [research review of PR #26](docs/RESEARCH_REVIEW.md) documents
+corrected sampling claims, a cross-video near-duplicate sensitivity, reproducible
+checks and deployment blockers. Results remain development-preliminary.
+
 ## Technical highlights
 
 - Supervised behavioural-intent NLP over public Reddit and YouTube discussion

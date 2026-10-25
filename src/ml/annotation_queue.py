@@ -8,8 +8,8 @@ writes a label.
 Selection is stratified with explicit quotas, so the batch targets the gaps
 rather than whatever the model finds most uncertain:
 
-1. ``random_control`` is drawn first, uniformly from the whole eligible pool,
-   so it stays an unbiased sample for estimating base rates and model error.
+1. ``random_control`` is drawn first in random order from the eligible pool.
+   With a group cap it is a diversity sample, not a uniform probability sample.
 2. ``missing_class_candidate``: the rule baseline predicts a class with zero or
    very few labelled rows.
 3. ``reddit``: the platform that is barely represented.
@@ -111,6 +111,9 @@ PROVENANCE_COLUMNS = [
     "stratum",
     "stratum_reason",
     "inclusion_probability",
+    "selection_fraction",
+    "parent_id",
+    "source",
     "rule_label",
     "model_label",
     "model_probability",
@@ -129,9 +132,9 @@ def _file_hash(path: Path) -> str:
 
 def _group_key(row_parent, source) -> str | None:
     """Labelled groups are ``yt:<id>``/``rd:<id>``; pool files may hold bare ids."""
-    if row_parent is None or (isinstance(row_parent, float) and np.isnan(row_parent)):
+    if pd.isna(row_parent) or not str(row_parent).strip():
         return None
-    value = str(row_parent)
+    value = str(row_parent).strip()
     if ":" in value:
         return value
     prefix = {"youtube": "yt", "reddit": "rd"}.get(str(source), None)
@@ -157,7 +160,9 @@ def _near_duplicate_mask(pool_texts: pd.Series, reference_texts: pd.Series) -> n
     return (cosine_similarity(pool, ref) >= NEAR_DUPLICATE_THRESHOLD).any(axis=1)
 
 
-def prepare_pool(pool: pd.DataFrame, labelled: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def prepare_pool(
+    pool: pd.DataFrame, labelled: pd.DataFrame, frozen: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, dict]:
     """Eligible, de-duplicated candidates plus counts of what was excluded."""
     frame = pool.copy()
     frame["pool_row"] = np.arange(len(frame))
@@ -185,6 +190,21 @@ def prepare_pool(pool: pd.DataFrame, labelled: pd.DataFrame) -> tuple[pd.DataFra
     parent = frame["parent_id"] if "parent_id" in frame.columns else pd.Series(pd.NA, index=frame.index)
     frame["group_key"] = [_group_key(p, s) for p, s in zip(parent, source)]
     frame["parent_id"] = frame["group_key"]
+    if frozen is not None:
+        required = {"text", "parent_id", "source"}
+        if not required.issubset(frozen.columns) or frozen.empty:
+            raise ValueError("Frozen exclusion file needs nonempty text, source and parent_id rows")
+        frozen_groups = pd.Series([
+            _group_key(p, s) for p, s in zip(frozen["parent_id"], frozen["source"])
+        ])
+        if frozen_groups.isna().any() or frozen_groups.astype(str).str.strip().eq("").any():
+            raise ValueError("Every frozen row must have a discussion group")
+        blocked = frame["group_key"].isin(set(frozen_groups)) | frame["group_key"].isna()
+        excluded["frozen_or_unknown_group"] = int(blocked.sum())
+        frame = frame[~blocked].copy()
+        near_frozen = _near_duplicate_mask(frame["text"], frozen["text"].fillna("").astype(str))
+        excluded["near_duplicate_of_frozen"] = int(near_frozen.sum())
+        frame = frame[~near_frozen].reset_index(drop=True)
     record_column = next((c for c in ("id", "record_id") if c in frame.columns), None)
     frame["source_record_id"] = frame[record_column].astype(str) if record_column else pd.NA
     return frame, excluded
@@ -260,12 +280,15 @@ def select_queue(
 ) -> tuple[pd.DataFrame, dict]:
     """Fill each stratum's quota in order; report shortfalls instead of back-filling.
 
-    Every selected row records its stratum's inclusion probability (selected /
-    eligible at selection time). Without that, a stratified batch cannot later
-    be re-weighted to estimate population performance: the existing corpus has
-    exactly this problem.
+    Selected/eligible is an allocation fraction, not an inclusion probability
+    under a group cap or deterministic uncertainty ordering. Only an uncapped,
+    first, uniform random-control draw has known inclusion probabilities.
     """
     quotas = dict(quotas or DEFAULT_QUOTAS)
+    if any(q < 0 for q in quotas.values()) or (max_per_group is not None and max_per_group < 1):
+        raise ValueError("Quotas must be nonnegative and group cap positive or None")
+    if not 0 <= double_share <= 1:
+        raise ValueError("double_share must be between 0 and 1")
     rng = np.random.default_rng(seed)
     masks = _stratum_masks(scored, labelled)
     taken = pd.Series(False, index=scored.index)
@@ -276,7 +299,7 @@ def select_queue(
     for stratum, quota in quotas.items():
         if stratum == STRATUM_RANDOM:
             eligible = ~taken
-            reason = pd.Series("uniform random sample of the eligible pool", index=scored.index)
+            reason = pd.Series("random-order control selection from the eligible pool", index=scored.index)
         else:
             mask, reason = masks[stratum]
             reason = pd.Series(reason, index=scored.index)
@@ -295,7 +318,10 @@ def select_queue(
         part = scored.loc[chosen].copy()
         part["stratum"] = stratum
         part["stratum_reason"] = reason.loc[chosen].to_numpy()
-        part["inclusion_probability"] = len(chosen) / len(candidates) if len(candidates) else np.nan
+        fraction = len(chosen) / len(candidates) if len(candidates) else np.nan
+        known_probability = stratum == STRATUM_RANDOM and not taken.any() and max_per_group is None
+        part["selection_fraction"] = fraction
+        part["inclusion_probability"] = fraction if known_probability else np.nan
         parts.append(part)
         taken.loc[chosen] = True
         report[stratum] = {
@@ -303,7 +329,8 @@ def select_queue(
             "eligible": int(len(candidates)),
             "selected": int(len(chosen)),
             "shortfall": int(max(0, quota - len(chosen))),
-            "inclusion_probability": (len(chosen) / len(candidates)) if len(candidates) else None,
+            "selection_fraction": fraction if len(candidates) else None,
+            "inclusion_probability": fraction if known_probability and len(candidates) else None,
         }
 
     queue = pd.concat(parts, ignore_index=True) if parts else scored.iloc[0:0].copy()
@@ -337,6 +364,7 @@ def build_annotation_queue(
     model_metadata: dict | None = None,
     max_per_group: int | None = DEFAULT_MAX_PER_GROUP,
     double_share: float = DOUBLE_ANNOTATION_SHARE,
+    frozen_path: Path | None = None,
 ) -> dict:
     """Build and write the blind queue, its provenance file and a manifest."""
     if pool_path is None:
@@ -348,7 +376,8 @@ def build_annotation_queue(
     pool = pd.read_csv(pool_path)
     labelled = load_labelled_data()
 
-    frame, excluded = prepare_pool(pool, labelled)
+    frozen = pd.read_csv(frozen_path) if frozen_path is not None else None
+    frame, excluded = prepare_pool(pool, labelled, frozen=frozen)
     scored = score_pool(frame, model)
     queue, strata = select_queue(
         scored, labelled, quotas, seed, max_per_group=max_per_group, double_share=double_share
@@ -370,6 +399,8 @@ def build_annotation_queue(
         "pool_path": str(pool_path),
         "pool_kind": pool_kind,
         "pool_hash": _file_hash(pool_path),
+        "frozen_exclusion": ({"path": str(frozen_path), "hash": _file_hash(frozen_path)}
+                             if frozen_path is not None else None),
         "pool_rows": int(len(pool)),
         "eligible_rows": int(len(frame)),
         "excluded": excluded,
@@ -381,10 +412,11 @@ def build_annotation_queue(
         "max_per_group": max_per_group,
         "double_annotation_share": double_share,
         "design_note": (
-            "inclusion_probability is selected/eligible within each stratum at selection "
-            "time. random_control is a uniform sample of the eligible pool; later strata are "
-            "conditional on the rows already taken, so use random_control for unbiased "
-            "prevalence estimates and stratum weights for the rest."
+            "Training acquisition queue, not a representative evaluation sample. "
+            "selection_fraction is selected/eligible, not an inverse-probability weight. "
+            "inclusion_probability is known only for an uncapped first uniform random-control "
+            "draw; capped and targeted rows have unknown inclusion probabilities. "
+            "Do not use this mixed queue to estimate population prevalence or final performance."
         ),
         "model": {
             "available": model is not None,
@@ -503,6 +535,8 @@ def main() -> None:
     build.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     build.add_argument("--seed", type=int, default=42)
     build.add_argument("--no-model", action="store_true", help="Rule-only disagreement stratum")
+    build.add_argument("--exclude-frozen", type=Path,
+                       help="CSV with text/source/parent_id; exclude entire frozen groups and near-duplicates")
     build.add_argument("--max-per-group", type=int, default=DEFAULT_MAX_PER_GROUP,
                        help="Cap comments per discussion group (0 = no cap)")
     build.add_argument("--double-share", type=float, default=DOUBLE_ANNOTATION_SHARE,
@@ -522,6 +556,7 @@ def main() -> None:
             pool_path=args.pool, output_dir=args.output_dir, seed=args.seed,
             model=model, model_metadata=metadata,
             max_per_group=args.max_per_group or None, double_share=args.double_share,
+            frozen_path=args.exclude_frozen,
         )
         manifest = result["manifest"]
         print(f"Pool: {manifest['pool_path']} ({manifest['pool_kind']}), "

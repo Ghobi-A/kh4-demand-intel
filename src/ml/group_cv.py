@@ -235,8 +235,14 @@ def run_group_cv(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     report_path: Path = DEFAULT_REPORT_PATH,
     n_boot: int = N_BOOTSTRAP,
+    link_near_duplicates: bool = False,
 ) -> dict:
     df = load_labelled_data()
+    duplicate_audit = None
+    if link_near_duplicates:
+        from src.ml.leakage import link_near_duplicate_groups
+
+        df, duplicate_audit = link_near_duplicate_groups(df)
     df = df[df["corrected_label"].notna()].reset_index(drop=True)
     df["true_actionable"] = to_binary_labels(df["corrected_label"])
     df["rule_label"] = [classify_intent(str(t))[0] for t in df["text"]]
@@ -317,6 +323,7 @@ def run_group_cv(
         "seeds": list(seeds),
         "n_folds": n_folds,
         "n_bootstrap": n_boot,
+        "near_duplicate_linking": duplicate_audit,
         "design": (
             "Whole discussion groups per outer fold; calibration and Stage 1 threshold "
             "fitted on an inner group-held-out validation split of the training folds; "
